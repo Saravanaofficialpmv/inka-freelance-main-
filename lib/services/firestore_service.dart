@@ -5,8 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../data/models/business_profile.dart';
 import '../data/models/client.dart';
+import '../data/models/expense.dart';
 import '../data/models/invoice.dart';
 import '../data/models/product.dart';
+import '../data/models/time_entry.dart';
+import '../data/models/project.dart';
 
 final firestoreServiceProvider = Provider<FirestoreService>((ref) {
   return FirestoreService();
@@ -28,6 +31,15 @@ class FirestoreService {
 
   CollectionReference<Map<String, dynamic>> _productsCollection(String userId) =>
       _firestore.collection('users').doc(userId).collection('products');
+
+  CollectionReference<Map<String, dynamic>> _expensesCollection(String userId) =>
+      _firestore.collection('users').doc(userId).collection('expenses');
+
+  CollectionReference<Map<String, dynamic>> _timeEntriesCollection(String userId) =>
+      _firestore.collection('users').doc(userId).collection('timeEntries');
+
+  CollectionReference<Map<String, dynamic>> _projectsCollection(String userId) =>
+      _firestore.collection('users').doc(userId).collection('projects');
 
   // ==================== BUSINESS PROFILE ====================
 
@@ -192,6 +204,132 @@ class FirestoreService {
     });
   }
 
+  // ==================== EXPENSES ====================
+
+  Future<void> saveExpense(Expense expense, {String? userId}) async {
+    final uid = userId ?? currentUserId;
+    if (uid == null) return;
+    try {
+      await _expensesCollection(uid).doc(expense.id).set(expense.toMap(), SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('Firestore saveExpense error: $e');
+    }
+  }
+
+  Future<void> deleteExpense(String expenseId, {String? userId}) async {
+    final uid = userId ?? currentUserId;
+    if (uid == null) return;
+    try {
+      await _expensesCollection(uid).doc(expenseId).delete();
+    } catch (e) {
+      debugPrint('Firestore deleteExpense error: $e');
+    }
+  }
+
+  Future<List<Expense>> getExpenses({String? userId}) async {
+    final uid = userId ?? currentUserId;
+    if (uid == null) return [];
+    try {
+      final snapshot = await _expensesCollection(uid).get();
+      return snapshot.docs.map((doc) => Expense.fromMap(doc.data())).toList();
+    } catch (e) {
+      debugPrint('Firestore getExpenses error: $e');
+      return [];
+    }
+  }
+
+  Stream<List<Expense>> streamExpenses({String? userId}) {
+    final uid = userId ?? currentUserId;
+    if (uid == null) return Stream.value([]);
+    return _expensesCollection(uid).snapshots().map((snapshot) {
+      return snapshot.docs.map((doc) => Expense.fromMap(doc.data())).toList();
+    });
+  }
+
+  // ==================== TIME ENTRIES ====================
+
+  Future<void> saveTimeEntry(TimeEntry entry, {String? userId}) async {
+    final uid = userId ?? currentUserId;
+    if (uid == null) return;
+    try {
+      await _timeEntriesCollection(uid).doc(entry.id).set(entry.toMap(), SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('Firestore saveTimeEntry error: $e');
+    }
+  }
+
+  Future<void> deleteTimeEntry(String entryId, {String? userId}) async {
+    final uid = userId ?? currentUserId;
+    if (uid == null) return;
+    try {
+      await _timeEntriesCollection(uid).doc(entryId).delete();
+    } catch (e) {
+      debugPrint('Firestore deleteTimeEntry error: $e');
+    }
+  }
+
+  Future<List<TimeEntry>> getTimeEntries({String? userId}) async {
+    final uid = userId ?? currentUserId;
+    if (uid == null) return [];
+    try {
+      final snapshot = await _timeEntriesCollection(uid).get();
+      return snapshot.docs.map((doc) => TimeEntry.fromMap(doc.data())).toList();
+    } catch (e) {
+      debugPrint('Firestore getTimeEntries error: $e');
+      return [];
+    }
+  }
+
+  Stream<List<TimeEntry>> streamTimeEntries({String? userId}) {
+    final uid = userId ?? currentUserId;
+    if (uid == null) return Stream.value([]);
+    return _timeEntriesCollection(uid).snapshots().map((snapshot) {
+      return snapshot.docs.map((doc) => TimeEntry.fromMap(doc.data())).toList();
+    });
+  }
+
+  // ==================== PROJECTS ====================
+
+  Future<void> saveProject(Project project, {String? userId}) async {
+    final uid = userId ?? currentUserId;
+    if (uid == null) return;
+    try {
+      await _projectsCollection(uid).doc(project.id).set(project.toMap(), SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('Firestore saveProject error: $e');
+    }
+  }
+
+  Future<void> deleteProject(String projectId, {String? userId}) async {
+    final uid = userId ?? currentUserId;
+    if (uid == null) return;
+    try {
+      await _projectsCollection(uid).doc(projectId).delete();
+    } catch (e) {
+      debugPrint('Firestore deleteProject error: $e');
+    }
+  }
+
+  Future<List<Project>> getProjects({String? userId}) async {
+    final uid = userId ?? currentUserId;
+    if (uid == null) return [];
+    try {
+      final snapshot = await _projectsCollection(uid).get();
+      return snapshot.docs.map((doc) => Project.fromMap(doc.data())).toList();
+    } catch (e) {
+      debugPrint('Firestore getProjects error: $e');
+      return [];
+    }
+  }
+
+  Stream<List<Project>> streamProjects({String? userId}) {
+    final uid = userId ?? currentUserId;
+    if (uid == null) return Stream.value([]);
+    return _projectsCollection(uid).snapshots().map((snapshot) {
+      return snapshot.docs.map((doc) => Project.fromMap(doc.data())).toList();
+    });
+  }
+
   // ==================== BIDIRECTIONAL SYNC ====================
 
   /// Syncs Firestore data into local Hive on login, and pushes unsynced local data to Firestore
@@ -201,6 +339,9 @@ class FirestoreService {
       final clientsBox = Hive.box<Client>('clients');
       final invoicesBox = Hive.box<Invoice>('invoices');
       final productsBox = Hive.box<Product>('products');
+      final expensesBox = Hive.box<Expense>('expenses');
+      final timeEntriesBox = Hive.box<TimeEntry>('time_entries');
+      final projectsBox = Hive.box<Project>('projects');
 
       // 1. Sync Profile
       final remoteProfile = await getBusinessProfile(userId: userId);
@@ -244,6 +385,42 @@ class FirestoreService {
       } else {
         for (var p in productsBox.values) {
           await saveProduct(p, userId: userId);
+        }
+      }
+
+      // 5. Sync Expenses
+      final remoteExpenses = await getExpenses(userId: userId);
+      if (remoteExpenses.isNotEmpty) {
+        for (var exp in remoteExpenses) {
+          await expensesBox.put(exp.id, exp);
+        }
+      } else {
+        for (var exp in expensesBox.values) {
+          await saveExpense(exp, userId: userId);
+        }
+      }
+
+      // 6. Sync Time Entries
+      final remoteTimeEntries = await getTimeEntries(userId: userId);
+      if (remoteTimeEntries.isNotEmpty) {
+        for (var te in remoteTimeEntries) {
+          await timeEntriesBox.put(te.id, te);
+        }
+      } else {
+        for (var te in timeEntriesBox.values) {
+          await saveTimeEntry(te, userId: userId);
+        }
+      }
+
+      // 7. Sync Projects
+      final remoteProjects = await getProjects(userId: userId);
+      if (remoteProjects.isNotEmpty) {
+        for (var proj in remoteProjects) {
+          await projectsBox.put(proj.id, proj);
+        }
+      } else {
+        for (var proj in projectsBox.values) {
+          await saveProject(proj, userId: userId);
         }
       }
 

@@ -49,6 +49,18 @@ class BusinessProfile {
   @HiveField(14)
   final String? signatureUrl;
 
+  @HiveField(15)
+  final String taxLabel; // e.g. 'GST', 'VAT', 'Sales Tax', 'HST', 'TVA'
+
+  @HiveField(16)
+  final double defaultTaxRate;
+
+  @HiveField(17)
+  final bool isTaxInclusive;
+
+  @HiveField(18)
+  final String? taxIdNumber; // e.g. "VAT Reg #", "EIN / Tax ID", "GSTIN"
+
   BusinessProfile({
     required this.businessName,
     required this.address,
@@ -65,6 +77,10 @@ class BusinessProfile {
     this.upiId,
     this.upiNumber,
     this.signatureUrl,
+    this.taxLabel = 'GST',
+    this.defaultTaxRate = 0.0,
+    this.isTaxInclusive = false,
+    this.taxIdNumber,
   });
 
   factory BusinessProfile.empty() {
@@ -73,7 +89,7 @@ class BusinessProfile {
       address: '',
       phone: '',
       email: '',
-      currency: '\$',
+      currency: 'USD',
       gstNumber: '',
       accountHolderName: '',
       accountNo: '',
@@ -83,6 +99,10 @@ class BusinessProfile {
       upiId: '',
       upiNumber: '',
       signatureUrl: '',
+      taxLabel: 'GST',
+      defaultTaxRate: 0.0,
+      isTaxInclusive: false,
+      taxIdNumber: '',
     );
   }
 
@@ -102,6 +122,10 @@ class BusinessProfile {
     String? upiId,
     String? upiNumber,
     String? signatureUrl,
+    String? taxLabel,
+    double? defaultTaxRate,
+    bool? isTaxInclusive,
+    String? taxIdNumber,
   }) {
     return BusinessProfile(
       businessName: businessName ?? this.businessName,
@@ -119,6 +143,10 @@ class BusinessProfile {
       upiId: upiId ?? this.upiId,
       upiNumber: upiNumber ?? this.upiNumber,
       signatureUrl: signatureUrl ?? this.signatureUrl,
+      taxLabel: taxLabel ?? this.taxLabel,
+      defaultTaxRate: defaultTaxRate ?? this.defaultTaxRate,
+      isTaxInclusive: isTaxInclusive ?? this.isTaxInclusive,
+      taxIdNumber: taxIdNumber ?? this.taxIdNumber,
     );
   }
 
@@ -139,6 +167,10 @@ class BusinessProfile {
       'upiId': upiId,
       'upiNumber': upiNumber,
       'signatureUrl': signatureUrl,
+      'taxLabel': taxLabel,
+      'defaultTaxRate': defaultTaxRate,
+      'isTaxInclusive': isTaxInclusive,
+      'taxIdNumber': taxIdNumber,
     };
   }
 
@@ -148,7 +180,7 @@ class BusinessProfile {
       address: map['address'] ?? '',
       phone: map['phone'] ?? '',
       email: map['email'] ?? '',
-      currency: map['currency'] ?? '\$',
+      currency: map['currency'] ?? 'USD',
       logoUrl: map['logoUrl'],
       gstNumber: map['gstNumber'],
       accountHolderName: map['accountHolderName'],
@@ -159,6 +191,10 @@ class BusinessProfile {
       upiId: map['upiId'],
       upiNumber: map['upiNumber'],
       signatureUrl: map['signatureUrl'],
+      taxLabel: map['taxLabel'] ?? 'GST',
+      defaultTaxRate: (map['defaultTaxRate'] as num?)?.toDouble() ?? 0.0,
+      isTaxInclusive: map['isTaxInclusive'] ?? false,
+      taxIdNumber: map['taxIdNumber'] ?? map['gstNumber'],
     );
   }
 }

@@ -5,8 +5,8 @@ import 'package:intl/intl.dart';
 import '../../data/models/product.dart';
 import '../providers/product_provider.dart';
 import '../providers/profile_provider.dart';
-import 'package:inka/core/constants/colors.dart';
 import '../../core/localization/app_localizations.dart';
+import '../../services/currency_tax_service.dart';
 
 class ProductsScreen extends ConsumerStatefulWidget {
   final bool isSelectionMode;
@@ -30,29 +30,40 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
   Widget build(BuildContext context) {
     final products = ref.watch(filteredProductsProvider);
     final profile = ref.watch(profileProvider);
-    final currencyFormat = NumberFormat.simpleCurrency(name: profile.currency, decimalDigits: 0);
+    final currencyFormat = CurrencyTaxService.getCurrencyFormatter(
+      currencyCode: profile.currency.isNotEmpty ? profile.currency : 'USD',
+      decimalDigits: 0,
+    );
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: const Color(0xFFF8F9FA),
       body: SafeArea(
         child: Column(
           children: [
             // ── Header ──
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 14.0),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   GestureDetector(
                     onTap: () => context.pop(),
                     child: Container(
-                      padding: const EdgeInsets.all(8),
+                      width: 44,
+                      height: 44,
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)],
+                        shape: BoxShape.circle,
+                        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
                       ),
-                      child: const Icon(Icons.arrow_back_ios_new, size: 20, color: Colors.black),
+                      child: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: Color(0xFF0F172A)),
                     ),
                   ),
                   Expanded(
@@ -60,7 +71,7 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 12.0),
                       child: Text(
                         AppLocalizations.of(context)?.translate('product_catalog') ?? 'Product Catalog',
-                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black),
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
                         textAlign: TextAlign.center,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -72,11 +83,22 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                       decoration: BoxDecoration(
-                        color: AppColors.primary,
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFFF5722), Color(0xFFFF7A50)],
+                        ),
                         borderRadius: BorderRadius.circular(20),
-                        boxShadow: [BoxShadow(color: AppColors.primary.withValues(alpha: 0.3), blurRadius: 10, offset: const Offset(0, 4))],
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFFF5722).withValues(alpha: 0.35),
+                            blurRadius: 10,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
                       ),
-                      child: Text(AppLocalizations.of(context)?.translate('add_item') ?? 'Add Item', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                      child: Text(
+                        AppLocalizations.of(context)?.translate('add_item') ?? 'Add Item',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
                     ),
                   ),
                 ],
@@ -85,24 +107,63 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
 
             // ── Search Bar ──
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
-              child: TextField(
-                controller: _searchController,
-                onChanged: (value) => ref.read(productSearchQueryProvider.notifier).state = value,
-                style: const TextStyle(color: Colors.black),
-                decoration: InputDecoration(
-                  hintText: AppLocalizations.of(context)?.translate('search') ?? 'Search...',
-                  hintStyle: const TextStyle(color: AppColors.textSecondary),
-                  prefixIcon: const Icon(Icons.search, color: AppColors.textSecondary),
-                  filled: true,
-                  fillColor: Colors.white,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 16),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 6.0),
+              child: Container(
+                height: 48,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 10,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: TextField(
+                        controller: _searchController,
+                        onChanged: (value) => ref.read(productSearchQueryProvider.notifier).state = value,
+                        style: const TextStyle(color: Color(0xFF0F172A), fontSize: 14),
+                        decoration: InputDecoration(
+                          hintText: AppLocalizations.of(context)?.translate('search') ?? 'Search items & services...',
+                          hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          contentPadding: EdgeInsets.zero,
+                          isDense: true,
+                          filled: false,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
+
+            // Section label
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20.0),
+              child: Row(
+                children: const [
+                  Text(
+                    'SERVICES & PRODUCTS',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2, color: Color(0xFF64748B)),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
 
             // ── Products List ──
             Expanded(
@@ -110,17 +171,17 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
                   ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.inventory_2_outlined, size: 64, color: AppColors.textSecondary.withOpacity(0.3)),
-                          const SizedBox(height: 16),
-                          const Text('No products found', style: TextStyle(color: AppColors.textSecondary)),
+                        children: const [
+                          Icon(Icons.inventory_2_outlined, size: 56, color: Color(0xFFCBD5E1)),
+                          SizedBox(height: 14),
+                          Text('No products found', style: TextStyle(color: Color(0xFF64748B))),
                         ],
                       ),
                     )
-                  : ListView.separated(
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                  : ListView.builder(
+                      physics: const BouncingScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
                       itemCount: products.length,
-                      separatorBuilder: (context, index) => const Divider(height: 1, color: AppColors.border),
                       itemBuilder: (context, index) {
                         final product = products[index];
                         return _ProductListItem(
@@ -150,16 +211,21 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete Product?'),
-        content: const Text('Are you sure you want to remove this product from your catalog?'),
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: Color(0xFFE2E8F0)),
+        ),
+        title: const Text('Delete Product?', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold)),
+        content: const Text('Are you sure you want to remove this product from your catalog?', style: TextStyle(color: Color(0xFF64748B))),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B)))),
           TextButton(
             onPressed: () {
               ref.read(productsProvider.notifier).deleteProduct(id);
               Navigator.pop(ctx);
             },
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            child: const Text('Delete', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -179,31 +245,45 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
         padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom + 24, left: 24, right: 24, top: 24),
-        decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+        ),
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(color: const Color(0xFFE2E8F0), borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
+              const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(product == null ? 'Add Product' : 'Update Product', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black)),
-                  IconButton(onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close, color: AppColors.textSecondary)),
+                  Text(
+                    product == null ? 'Add Product' : 'Update Product',
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                  ),
+                  IconButton(onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B))),
                 ],
               ),
-              const SizedBox(height: 24),
-              _BuildField(controller: nameController, label: 'Product Name', icon: Icons.shopping_bag_outlined),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
+              _BuildField(controller: nameController, label: 'Product / Service Name', icon: Icons.shopping_bag_outlined),
+              const SizedBox(height: 14),
               _BuildField(controller: priceController, label: 'Default Price', icon: Icons.attach_money, keyboardType: TextInputType.number),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               _BuildField(controller: categoryController, label: 'Category', icon: Icons.category_outlined),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               _BuildField(controller: descController, label: 'Description', icon: Icons.description_outlined, maxLines: 2),
-              const SizedBox(height: 32),
+              const SizedBox(height: 28),
               SizedBox(
                 width: double.infinity,
-                height: 58,
+                height: 54,
                 child: ElevatedButton(
                   onPressed: () async {
                     if (nameController.text.isEmpty || priceController.text.isEmpty) {
@@ -222,12 +302,16 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
                     } else {
                       await ref.read(productsProvider.notifier).updateProduct(newProduct);
                     }
-                    if (mounted) {
+                    if (mounted && context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Product catalog updated')));
                       Navigator.pop(ctx);
                     }
                   },
-                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18))),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF5722),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                    elevation: 0,
+                  ),
                   child: const Text('Save Product', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
                 ),
               ),
@@ -247,41 +331,75 @@ class _ProductListItem extends StatelessWidget {
   final VoidCallback onDelete;
   final VoidCallback onTap;
 
-  const _ProductListItem({required this.product, required this.currencyFormat, required this.isSelectionMode, required this.onEdit, required this.onDelete, required this.onTap});
+  const _ProductListItem({
+    required this.product,
+    required this.currencyFormat,
+    required this.isSelectionMode,
+    required this.onEdit,
+    required this.onDelete,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12.0),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: InkWell(
         onTap: onTap,
         child: Row(
           children: [
             Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), shape: BoxShape.circle),
-              child: const Center(child: Icon(Icons.inventory_2_outlined, color: AppColors.primary)),
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFECE8),
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFFFF5722).withValues(alpha: 0.25)),
+              ),
+              child: const Center(child: Icon(Icons.inventory_2_outlined, color: Color(0xFFFF5722), size: 20)),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(product.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black)),
-                  Text(product.category ?? 'Uncategorized', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                  Text(
+                    product.name,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F172A)),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    product.category ?? 'General Service',
+                    style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                  ),
                 ],
               ),
             ),
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text(currencyFormat.format(product.defaultPrice), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.primary)),
+                Text(
+                  currencyFormat.format(product.defaultPrice),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFFFF5722)),
+                ),
                 if (!isSelectionMode)
                   Row(
                     children: [
-                      IconButton(onPressed: onEdit, icon: const Icon(Icons.edit_note, color: AppColors.textSecondary, size: 22)),
-                      IconButton(onPressed: onDelete, icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20)),
+                      IconButton(onPressed: onEdit, icon: const Icon(Icons.edit_note, color: Color(0xFF64748B), size: 22)),
+                      IconButton(onPressed: onDelete, icon: const Icon(Icons.delete_outline, color: Color(0xFFEF4444), size: 20)),
                     ],
                   ),
               ],
@@ -300,26 +418,46 @@ class _BuildField extends StatelessWidget {
   final int maxLines;
   final TextInputType keyboardType;
 
-  const _BuildField({required this.controller, required this.label, required this.icon, this.maxLines = 1, this.keyboardType = TextInputType.text});
+  const _BuildField({
+    required this.controller,
+    required this.label,
+    required this.icon,
+    this.maxLines = 1,
+    this.keyboardType = TextInputType.text,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label.toUpperCase(), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.1, color: AppColors.textSecondary)),
+        Text(
+          label.toUpperCase(),
+          style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, letterSpacing: 1.1, color: Color(0xFF64748B)),
+        ),
         const SizedBox(height: 8),
         TextField(
           controller: controller,
           maxLines: maxLines,
           keyboardType: keyboardType,
-          style: const TextStyle(color: Colors.black),
+          style: const TextStyle(color: Color(0xFF0F172A), fontSize: 14),
           decoration: InputDecoration(
-            prefixIcon: Icon(icon, size: 20, color: AppColors.textSecondary),
+            prefixIcon: Icon(icon, size: 19, color: const Color(0xFF64748B)),
             filled: true,
-            fillColor: AppColors.background,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+            fillColor: const Color(0xFFF8FAFC),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(color: Color(0xFFFF5722), width: 1.5),
+            ),
           ),
         ),
       ],

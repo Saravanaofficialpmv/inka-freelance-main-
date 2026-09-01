@@ -16,13 +16,16 @@ class NavShell extends StatelessWidget {
       currentIndex = 0;
     } else if (location.startsWith('/history')) {
       currentIndex = 1;
-    } else if (location.startsWith('/create-invoice')) {
+    } else if (location.startsWith('/clients-tab') || location.startsWith('/clients')) {
       currentIndex = 2;
-    } else if (location.startsWith('/profile')) {
+    } else if (location.startsWith('/expenses') || location.startsWith('/statistics')) {
       currentIndex = 3;
+    } else if (location.startsWith('/profile')) {
+      currentIndex = 4;
     }
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF7F8FA),
       body: Stack(
         children: [
           child,

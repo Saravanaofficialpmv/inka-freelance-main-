@@ -26,6 +26,12 @@ class Invoice extends HiveObject {
   final String status; // 'pending', 'paid', 'overdue'
   @HiveField(9)
   final String notes;
+  @HiveField(10)
+  final bool isRecurring;
+  @HiveField(11)
+  final String recurringInterval; // 'weekly', 'monthly', 'quarterly', 'yearly'
+  @HiveField(12)
+  final DateTime? nextRecurringDate;
 
   Invoice({
     required this.id,
@@ -38,11 +44,15 @@ class Invoice extends HiveObject {
     this.discount = 0.0,
     this.status = 'pending',
     this.notes = '',
+    this.isRecurring = false,
+    this.recurringInterval = 'monthly',
+    this.nextRecurringDate,
   });
 
   double get subtotal => items.fold(0.0, (sum, item) => sum + item.total);
   double get taxAmount => subtotal * (taxPercentage / 100);
   double get total => subtotal + taxAmount - discount;
+  bool get isPaid => status.toLowerCase() == 'paid';
 
   Invoice copyWith({
     String? id,
@@ -55,6 +65,9 @@ class Invoice extends HiveObject {
     double? discount,
     String? status,
     String? notes,
+    bool? isRecurring,
+    String? recurringInterval,
+    DateTime? nextRecurringDate,
   }) {
     return Invoice(
       id: id ?? this.id,
@@ -67,6 +80,9 @@ class Invoice extends HiveObject {
       discount: discount ?? this.discount,
       status: status ?? this.status,
       notes: notes ?? this.notes,
+      isRecurring: isRecurring ?? this.isRecurring,
+      recurringInterval: recurringInterval ?? this.recurringInterval,
+      nextRecurringDate: nextRecurringDate ?? this.nextRecurringDate,
     );
   }
 
@@ -82,6 +98,9 @@ class Invoice extends HiveObject {
       'discount': discount,
       'status': status,
       'notes': notes,
+      'isRecurring': isRecurring,
+      'recurringInterval': recurringInterval,
+      'nextRecurringDate': nextRecurringDate?.millisecondsSinceEpoch,
     };
   }
 
@@ -97,6 +116,11 @@ class Invoice extends HiveObject {
       discount: map['discount']?.toDouble() ?? 0.0,
       status: map['status'] ?? 'pending',
       notes: map['notes'] ?? '',
+      isRecurring: map['isRecurring'] ?? false,
+      recurringInterval: map['recurringInterval'] ?? 'monthly',
+      nextRecurringDate: map['nextRecurringDate'] != null
+          ? DateTime.fromMillisecondsSinceEpoch(map['nextRecurringDate'])
+          : null,
     );
   }
 }

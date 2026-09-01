@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:inka/core/constants/colors.dart';
-import '../../core/localization/app_localizations.dart';
 
 class CustomBottomNav extends StatelessWidget {
   final int currentIndex;
@@ -10,44 +8,56 @@ class CustomBottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      margin: const EdgeInsets.fromLTRB(28, 0, 28, 24),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A).withValues(alpha: 0.95), // Solid dark translucent pill
-        borderRadius: BorderRadius.circular(40),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(36),
+        border: Border.all(color: const Color(0xFFE5E7EB), width: 1.2),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.4),
-            blurRadius: 30,
-            offset: const Offset(0, 10),
-          )
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+          BoxShadow(
+            color: const Color(0xFF9BD71B).withValues(alpha: 0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
         ],
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
+          // Home
           _NavItem(
-            icon: Icons.home_filled,
-            label: AppLocalizations.of(context)?.translate('dashboard') ?? 'Dashboard',
+            icon: Icons.home_rounded,
             isActive: currentIndex == 0,
             onTap: () => GoRouter.of(context).go('/dashboard'),
           ),
+          // Invoices
           _NavItem(
-            icon: Icons.history_rounded,
-            label: AppLocalizations.of(context)?.translate('history') ?? 'History',
+            icon: Icons.description_outlined,
             isActive: currentIndex == 1,
             onTap: () => GoRouter.of(context).go('/history'),
           ),
+          // Clients
           _NavItem(
-            icon: Icons.add_circle_outline_rounded,
-            label: AppLocalizations.of(context)?.translate('create') ?? 'Create',
+            icon: Icons.people_outline_rounded,
             isActive: currentIndex == 2,
-            onTap: () => GoRouter.of(context).go('/create-invoice'),
+            onTap: () => GoRouter.of(context).go('/clients-tab'),
           ),
+          // Expenses / Wallet
           _NavItem(
-            icon: Icons.person_outline_rounded,
-            label: AppLocalizations.of(context)?.translate('profile') ?? 'Profile',
+            icon: Icons.account_balance_wallet_outlined,
             isActive: currentIndex == 3,
+            onTap: () => GoRouter.of(context).go('/expenses'),
+          ),
+          // Settings (Profile)
+          _NavItem(
+            icon: Icons.settings_outlined,
+            isActive: currentIndex == 4,
             onTap: () => GoRouter.of(context).go('/profile'),
           ),
         ],
@@ -58,13 +68,11 @@ class CustomBottomNav extends StatelessWidget {
 
 class _NavItem extends StatelessWidget {
   final IconData icon;
-  final String label;
   final bool isActive;
   final VoidCallback onTap;
 
   const _NavItem({
     required this.icon,
-    required this.label,
     required this.isActive,
     required this.onTap,
   });
@@ -75,37 +83,31 @@ class _NavItem extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
+        duration: const Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        width: 44,
+        height: 44,
         decoration: BoxDecoration(
-          color: isActive ? AppColors.primary : Colors.transparent,
-          borderRadius: BorderRadius.circular(30),
+          color: isActive ? const Color(0xFF0D3B3E) : Colors.transparent, // Dark Teal active circle from mockup
+          shape: BoxShape.circle,
+          boxShadow: isActive
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF0D3B3E).withValues(alpha: 0.35),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
+                ]
+              : null,
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              color: isActive ? Colors.white : Colors.white60,
-              size: 22,
-            ),
-            if (isActive) ...[
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ],
+        child: Center(
+          child: Icon(
+            icon,
+            color: isActive ? Colors.white : const Color(0xFF64748B),
+            size: 22,
+          ),
         ),
       ),
     );
   }
 }
-
-

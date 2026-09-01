@@ -1,10 +1,24 @@
 import 'dart:io';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class ErrorHandler {
   static String getErrorMessage(dynamic error) {
     if (error is SocketException) {
       return 'No internet connection. Please check your network and try again.';
+    }
+
+    if (error is PlatformException) {
+      if (error.code == 'sign_in_failed' || error.message?.contains('10') == true) {
+        return 'Google Sign-In requires SHA-1 registration in Firebase. Please sign in with Email or use Demo Access.';
+      }
+      if (error.code == 'sign_in_canceled' || error.code == '12501') {
+        return 'Sign-in was cancelled.';
+      }
+      if (error.code == 'network_error' || error.code == '7') {
+        return 'Network connection error during sign in.';
+      }
+      return error.message ?? 'Sign-in encountered a platform error.';
     }
 
     if (error is FirebaseAuthException) {

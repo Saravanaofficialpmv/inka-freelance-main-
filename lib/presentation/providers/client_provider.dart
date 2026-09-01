@@ -10,6 +10,8 @@ final clientsProvider = StateNotifierProvider<ClientsNotifier, List<Client>>((re
   return ClientsNotifier(firestoreService);
 });
 
+final clientProvider = clientsProvider;
+
 final filteredClientsProvider = Provider<List<Client>>((ref) {
   final query = ref.watch(clientSearchQueryProvider).toLowerCase();
   final clients = ref.watch(clientsProvider);

@@ -4,14 +4,18 @@ import 'package:pdf/pdf.dart' as pdf_lib;
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import '../data/models/invoice.dart';
-import 'package:intl/intl.dart';
-
 import '../data/models/business_profile.dart';
+import 'package:intl/intl.dart';
+import 'currency_tax_service.dart';
+import 'payment_qr_service.dart';
 
 class PdfService {
   static Future<Uint8List> generateInvoicePdf(Invoice invoice, BusinessProfile profile) async {
     final pdf = pw.Document();
-    final currencyFormat = NumberFormat.simpleCurrency(name: profile.currency, decimalDigits: 2);
+    final currencyFormat = CurrencyTaxService.getCurrencyFormatter(
+      currencyCode: profile.currency.isNotEmpty ? profile.currency : 'USD',
+      decimalDigits: 2,
+    );
 
     pw.MemoryImage? logoImage;
     if (!kIsWeb && profile.logoUrl != null && profile.logoUrl!.isNotEmpty) {
@@ -48,8 +52,10 @@ class PdfService {
                     pw.Text(profile.businessName.toUpperCase(),
                         style: pw.TextStyle(
                             fontSize: 14, fontWeight: pw.FontWeight.bold)),
-                    if (profile.gstNumber != null && profile.gstNumber!.isNotEmpty)
-                      pw.Text('GSTIN ${profile.gstNumber}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+                    if (profile.taxIdNumber != null && profile.taxIdNumber!.isNotEmpty)
+                      pw.Text('${profile.taxLabel} ID: ${profile.taxIdNumber}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10))
+                    else if (profile.gstNumber != null && profile.gstNumber!.isNotEmpty)
+                      pw.Text('Tax ID: ${profile.gstNumber}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
                     pw.SizedBox(height: 2),
                     pw.SizedBox(
                       width: 250,
@@ -198,9 +204,11 @@ class PdfService {
                   flex: 1,
                   child: pw.Column(
                     children: [
-                      _summaryRow('Taxable Amount', currencyFormat.format(invoice.subtotal)),
+                      _summaryRow('Subtotal', currencyFormat.format(invoice.subtotal)),
+                      if (invoice.discount > 0)
+                        _summaryRow('Discount', '- ${currencyFormat.format(invoice.discount)}'),
                       if (invoice.taxPercentage > 0)
-                        _summaryRow('IGST ${invoice.taxPercentage}%', currencyFormat.format(invoice.taxAmount)),
+                        _summaryRow('${profile.taxLabel} (${invoice.taxPercentage.toStringAsFixed(1)}%)', currencyFormat.format(invoice.taxAmount)),
                       pw.Container(
                         color: pdf_lib.PdfColors.grey100,
                         padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 8),
@@ -235,13 +243,18 @@ class PdfService {
                   child: pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
-                      pw.Text('Pay using UPI:', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
-                      pw.SizedBox(height: 8),
-                    pw.BarcodeWidget(
+                      pw.Text('Pay using UPI (GPay / PhonePe / Paytm):', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                      pw.SizedBox(height: 6),
+                      pw.BarcodeWidget(
                         barcode: pw.Barcode.qrCode(),
-                        data: profile.upiId != null && profile.upiId!.isNotEmpty 
-                          ? 'upi://pay?pa=${profile.upiId}&pn=${Uri.encodeComponent(profile.businessName)}&am=${invoice.total}&cu=INR'
-                          : 'upi://pay?pa=${profile.email.split("@")[0]}@okaxis&pn=${Uri.encodeComponent(profile.businessName)}&am=${invoice.total}&cu=INR',
+                        data: PaymentQrService.buildUpiUrl(
+                          upiId: (profile.upiId != null && profile.upiId!.isNotEmpty)
+                              ? profile.upiId!
+                              : '${profile.email.split("@").first}@okaxis',
+                          payeeName: profile.businessName.isNotEmpty ? profile.businessName : 'Inka Business',
+                          amount: invoice.total,
+                          invoiceNumber: invoice.invoiceNumber,
+                        ),
                         width: 80,
                         height: 80,
                       ),

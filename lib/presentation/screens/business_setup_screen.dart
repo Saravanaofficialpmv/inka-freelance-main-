@@ -5,9 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import '../providers/profile_provider.dart';
 import '../../data/models/business_profile.dart';
-import 'package:inka/core/constants/colors.dart';
 import '../../core/localization/app_localizations.dart';
-
 import 'package:firebase_auth/firebase_auth.dart';
 
 class BusinessSetupScreen extends ConsumerStatefulWidget {
@@ -92,33 +90,35 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: const Color(0xFFF8F9FA),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 40.0),
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
                 AppLocalizations.of(context)?.translate('setup_business') ?? 'Set Up Your Business',
                 style: const TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
+                  fontSize: 26,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF0F172A),
+                  letterSpacing: -0.5,
                   height: 1.2,
                 ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 12),
-              Text(
-                'Tell us a bit about your business to get started.',
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 15,
+              const SizedBox(height: 8),
+              const Text(
+                'Complete your freelance profile to brand invoices.',
+                style: TextStyle(
+                  color: Color(0xFF64748B),
+                  fontSize: 14,
                 ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 48),
+              const SizedBox(height: 36),
               
               // Logo Picker
               Center(
@@ -130,9 +130,10 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
+                          color: Colors.black.withValues(alpha: 0.04),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         ),
@@ -148,13 +149,13 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
                       ? const Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.add_a_photo_outlined, color: AppColors.primary, size: 32),
-                            SizedBox(height: 4),
+                            Icon(Icons.add_a_photo_outlined, color: Color(0xFFFF5722), size: 30),
+                            SizedBox(height: 6),
                             Text(
                               'Add Logo',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: AppColors.primary,
+                                color: Color(0xFFFF5722),
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -164,15 +165,15 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 40),
+              const SizedBox(height: 32),
 
               _buildInputField(
-                label: 'Business Name',
-                hint: 'e.g. Acme Corporation',
+                label: 'Business / Freelancer Name',
+                hint: 'e.g. Acme Studio',
                 controller: _nameController,
                 icon: Icons.business_outlined,
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
 
               _buildInputField(
                 label: 'Business Email',
@@ -181,7 +182,7 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
                 icon: Icons.email_outlined,
                 keyboardType: TextInputType.emailAddress,
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
 
               _buildInputField(
                 label: 'Phone Number',
@@ -190,42 +191,44 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
                 icon: Icons.phone_outlined,
                 keyboardType: TextInputType.phone,
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
 
               _buildInputField(
-                label: 'Business Address',
+                label: 'Physical Address',
                 hint: '123 Business St, City, Country',
                 controller: _addressController,
                 icon: Icons.location_on_outlined,
                 maxLines: 2,
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
 
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Default Currency',
+                    'DEFAULT CURRENCY',
                     style: TextStyle(
-                      color: Colors.black,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
+                      color: Color(0xFF64748B),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 11,
+                      letterSpacing: 1.1,
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.border),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
                     ),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<String>(
                         value: _selectedCurrency,
                         isExpanded: true,
-                        icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.textSecondary),
-                        style: const TextStyle(color: Colors.black, fontSize: 16),
+                        dropdownColor: Colors.white,
+                        icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF64748B)),
+                        style: const TextStyle(color: Color(0xFF0F172A), fontSize: 15),
                         onChanged: (String? newValue) {
                           if (newValue != null) {
                             setState(() {
@@ -237,7 +240,7 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
                             .map<DropdownMenuItem<String>>((String value) {
                           return DropdownMenuItem<String>(
                             value: value,
-                            child: Text(value),
+                            child: Text(value, style: const TextStyle(color: Color(0xFF0F172A))),
                           );
                         }).toList(),
                       ),
@@ -245,14 +248,14 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 48),
+              const SizedBox(height: 36),
 
               SizedBox(
-                height: 58,
+                height: 54,
                 child: ElevatedButton(
                   onPressed: _saveAndContinue,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
+                    backgroundColor: const Color(0xFFFF5722),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(18),
@@ -262,7 +265,7 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
                   child: const Text(
                     'Save and Get Started',
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -287,37 +290,38 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          label,
+          label.toUpperCase(),
           style: const TextStyle(
-            color: Colors.black,
-            fontWeight: FontWeight.w600,
-            fontSize: 14,
+            color: Color(0xFF64748B),
+            fontWeight: FontWeight.bold,
+            fontSize: 11,
+            letterSpacing: 1.1,
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         TextField(
           controller: controller,
           keyboardType: keyboardType,
           maxLines: maxLines,
-          style: const TextStyle(color: Colors.black),
+          style: const TextStyle(color: Color(0xFF0F172A), fontSize: 14.5),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
-            prefixIcon: Icon(icon, color: AppColors.textSecondary, size: 20),
+            hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
+            prefixIcon: Icon(icon, color: const Color(0xFF64748B), size: 19),
             filled: true,
             fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: AppColors.border),
+              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: AppColors.border),
+              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+              borderSide: const BorderSide(color: Color(0xFFFF5722), width: 1.5),
             ),
           ),
         ),

@@ -20,10 +20,21 @@ import 'data/models/invoice_item.dart';
 import 'data/models/invoice.dart';
 import 'data/models/business_profile.dart';
 import 'data/models/product.dart';
+import 'data/models/expense.dart';
+import 'data/models/time_entry.dart';
+import 'data/models/project.dart';
 import 'presentation/widgets/nav_shell.dart';
 import 'presentation/screens/profile_screen.dart';
+import 'presentation/screens/invoices_history_screen.dart';
 import 'presentation/screens/products_screen.dart';
 import 'presentation/screens/business_setup_screen.dart';
+import 'presentation/screens/expenses_screen.dart';
+import 'presentation/screens/time_tracker_screen.dart';
+import 'presentation/screens/projects_screen.dart';
+import 'presentation/screens/add_edit_project_screen.dart';
+import 'presentation/screens/project_details_screen.dart';
+import 'presentation/screens/client_details_screen.dart';
+import 'presentation/screens/subscription_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -46,16 +57,37 @@ void main() async {
   if (!Hive.isAdapterRegistered(2)) Hive.registerAdapter(InvoiceItemAdapter());
   if (!Hive.isAdapterRegistered(4)) Hive.registerAdapter(BusinessProfileAdapter());
   if (!Hive.isAdapterRegistered(5)) Hive.registerAdapter(ProductAdapter());
+  if (!Hive.isAdapterRegistered(6)) Hive.registerAdapter(ExpenseAdapter());
+  if (!Hive.isAdapterRegistered(7)) Hive.registerAdapter(TimeEntryAdapter());
+  if (!Hive.isAdapterRegistered(8)) Hive.registerAdapter(ProjectAdapter());
   
-  // 4. Open Boxes
+  // 4. Open Boxes with Fault-Tolerant Error Recovery
   await Future.wait([
-    Hive.openBox<Client>('clients'),
-    Hive.openBox<Invoice>('invoices'),
-    Hive.openBox<BusinessProfile>('business_profile'),
-    Hive.openBox<Product>('products'),
+    _safeOpenBox<Client>('clients'),
+    _safeOpenBox<Invoice>('invoices'),
+    _safeOpenBox<BusinessProfile>('business_profile'),
+    _safeOpenBox<Product>('products'),
+    _safeOpenBox<Expense>('expenses'),
+    _safeOpenBox<TimeEntry>('time_entries'),
+    _safeOpenBox<Project>('projects'),
+    _safeOpenBox('subscription_prefs'),
   ]);
   
   runApp(const ProviderScope(child: InkaApp()));
+}
+
+Future<void> _safeOpenBox<T>(String name) async {
+  try {
+    await Hive.openBox<T>(name);
+  } catch (e) {
+    debugPrint('Hive openBox error for $name, attempting auto-recovery: $e');
+    try {
+      await Hive.deleteBoxFromDisk(name);
+      await Hive.openBox<T>(name);
+    } catch (e2) {
+      debugPrint('Fatal box open failure for $name: $e2');
+    }
+  }
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -76,17 +108,27 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state, child) => NavShell(state: state, child: child),
         routes: [
           GoRoute(path: '/dashboard', pageBuilder: (c, s) => const NoTransitionPage(child: DashboardScreen())),
-          GoRoute(path: '/create-invoice', pageBuilder: (c, s) => const NoTransitionPage(child: CreateInvoiceScreen())),
           GoRoute(path: '/history', pageBuilder: (c, s) => const NoTransitionPage(child: InvoicesHistoryScreen())),
+          GoRoute(path: '/clients-tab', pageBuilder: (c, s) => const NoTransitionPage(child: ClientsScreen())),
+          GoRoute(path: '/expenses', pageBuilder: (c, s) => const NoTransitionPage(child: ExpensesScreen())),
           GoRoute(path: '/profile', pageBuilder: (c, s) => const NoTransitionPage(child: ProfileScreen())),
         ],
       ),
+      GoRoute(path: '/create-invoice', builder: (c, s) => const CreateInvoiceScreen()),
       
       GoRoute(path: '/preview', builder: (c, s) => InvoicePreviewScreen(invoice: s.extra as Invoice)),
       GoRoute(path: '/clients', builder: (c, s) => const ClientsScreen()),
       GoRoute(path: '/clients-select', builder: (c, s) => const ClientsScreen(isSelectionMode: true)),
       GoRoute(path: '/products', builder: (c, s) => const ProductsScreen()),
       GoRoute(path: '/products-select', builder: (c, s) => const ProductsScreen(isSelectionMode: true)),
+      GoRoute(path: '/expenses', builder: (c, s) => const ExpensesScreen()),
+      GoRoute(path: '/time-tracker', builder: (c, s) => const TimeTrackerScreen()),
+      GoRoute(path: '/projects', builder: (c, s) => const ProjectsScreen()),
+      GoRoute(path: '/add-project', builder: (c, s) => const AddEditProjectScreen()),
+      GoRoute(path: '/edit-project', builder: (c, s) => AddEditProjectScreen(project: s.extra as Project?)),
+      GoRoute(path: '/project-details', builder: (c, s) => ProjectDetailsScreen(project: s.extra as Project)),
+      GoRoute(path: '/client-details', builder: (c, s) => ClientDetailsScreen(client: s.extra as Client)),
+      GoRoute(path: '/subscription', builder: (c, s) => const SubscriptionScreen()),
     ],
   );
 });

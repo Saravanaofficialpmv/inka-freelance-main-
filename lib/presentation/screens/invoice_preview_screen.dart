@@ -1,206 +1,511 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
-import '../../core/constants/colors.dart';
 import '../../data/models/invoice.dart';
-import '../../services/pdf_service.dart';
 import '../providers/profile_provider.dart';
 import '../viewmodels/invoice_viewmodel.dart';
+import '../../services/currency_tax_service.dart';
+import '../../services/pdf_service.dart';
+import '../widgets/share_invoice_bottom_sheet.dart';
+import '../widgets/payment_qr_sheet.dart';
 
-class InvoicePreviewScreen extends ConsumerWidget {
+class InvoicePreviewScreen extends ConsumerStatefulWidget {
   final Invoice invoice;
 
   const InvoicePreviewScreen({super.key, required this.invoice});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<InvoicePreviewScreen> createState() => _InvoicePreviewScreenState();
+}
+
+class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
+  int _activeItemIndex = 0;
+  late PageController _pageController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController(viewportFraction: 0.9);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final liveInvoices = ref.watch(invoiceProvider);
+    final currentInvoice = liveInvoices.firstWhere(
+      (inv) => inv.id == widget.invoice.id,
+      orElse: () => widget.invoice,
+    );
+
     final profile = ref.watch(profileProvider);
-    final invoices = ref.watch(invoiceProvider);
-    final currentInvoice = invoices.firstWhere((inv) => inv.id == invoice.id, orElse: () => invoice);
-    final currencyFormat = NumberFormat.simpleCurrency(name: profile.currency, decimalDigits: 0);
+    final isPaid = currentInvoice.status.toLowerCase() == 'paid';
+
+    final currencyFormat = CurrencyTaxService.getCurrencyFormatter(
+      currencyCode: profile.currency.isNotEmpty ? profile.currency : 'USD',
+      decimalDigits: 2,
+    );
+
+    final subtotal = currentInvoice.subtotal;
+    final taxAmount = currentInvoice.taxAmount;
+    final discountAmount = currentInvoice.discount;
+    final grandTotal = currentInvoice.total;
+
+    final senderName = profile.businessName.isNotEmpty ? profile.businessName : 'Jamil Suta';
+    final senderAddress = profile.address.isNotEmpty ? profile.address : '553, Park Avenue, East Side New York';
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(currentInvoice.invoiceNumber),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.share),
-            onPressed: () => PdfService.shareInvoice(currentInvoice, profile),
-          ),
-          IconButton(
-            icon: const Icon(Icons.picture_as_pdf),
-            onPressed: () => PdfService.printInvoice(currentInvoice, profile),
-          )
-        ],
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+      backgroundColor: const Color(0xFFF7F8FA),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // ── Top Header Bar ──
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20.0, 14.0, 20.0, 10.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('INVOICE', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 2)),
-                          const SizedBox(height: 8),
-                          Text('#${currentInvoice.invoiceNumber}', style: const TextStyle(color: Colors.grey)),
+                  GestureDetector(
+                    onTap: () => context.pop(),
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.03),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
                         ],
                       ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          const Text('Inka', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                          Text(DateFormat.yMMMd().format(currentInvoice.issueDate)),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 32),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Billed To:', style: TextStyle(color: Colors.grey)),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                           color: currentInvoice.status == 'paid' ? AppColors.success.withOpacity(0.1) : AppColors.error.withOpacity(0.1),
-                           borderRadius: BorderRadius.circular(12)
-                        ),
-                        child: Text(
-                           currentInvoice.status.toUpperCase(),
-                           style: TextStyle(
-                              color: currentInvoice.status == 'paid' ? AppColors.success : AppColors.error,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                           ),
-                        )
-                      )
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(currentInvoice.client.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                  Text(currentInvoice.client.email),
-                  Text(currentInvoice.client.phone),
-                  Text(currentInvoice.client.address),
-                  const SizedBox(height: 32),
-                  const Divider(),
-                  const Text('Items', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                  const Divider(),
-                  ...currentInvoice.items.map((item) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Row(
-                      children: [
-                        Expanded(flex: 3, child: Text(item.name)),
-                        Expanded(flex: 1, child: Text('${item.quantity}', textAlign: TextAlign.center)),
-                        Expanded(flex: 2, child: Text(currencyFormat.format(item.price), textAlign: TextAlign.right)),
-                        Expanded(flex: 2, child: Text(currencyFormat.format(item.total), textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.bold))),
-                      ],
+                      child: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: Color(0xFF0F172A)),
                     ),
-                  )),
-                  const Divider(),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      const SizedBox(width: 100, child: Text('Subtotal:', style: TextStyle(fontSize: 16, color: Colors.grey))),
-                      SizedBox(width: 120, child: Text(currencyFormat.format(currentInvoice.subtotal), textAlign: TextAlign.right, style: const TextStyle(fontSize: 16))),
-                    ],
                   ),
-                  if (currentInvoice.taxPercentage > 0)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          SizedBox(width: 100, child: Text('Tax (${currentInvoice.taxPercentage}%):', style: const TextStyle(fontSize: 16, color: Colors.grey))),
-                          SizedBox(width: 120, child: Text(currencyFormat.format(currentInvoice.taxAmount), textAlign: TextAlign.right, style: const TextStyle(fontSize: 16))),
-                        ],
-                      ),
+                  const Text(
+                    'Invoice Details',
+                    style: TextStyle(
+                      color: Color(0xFF0F172A),
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.3,
                     ),
-                  if (currentInvoice.discount > 0)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          const SizedBox(width: 100, child: Text('Discount:', style: TextStyle(fontSize: 16, color: Colors.grey))),
-                          SizedBox(width: 120, child: Text('-${currencyFormat.format(currentInvoice.discount)}', textAlign: TextAlign.right, style: const TextStyle(fontSize: 16, color: Colors.red))),
-                        ],
+                  ),
+                  GestureDetector(
+                    onTap: () {
+                      PaymentQrSheet.show(
+                        context,
+                        profile: profile,
+                        invoice: currentInvoice,
+                      );
+                    },
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
                       ),
+                      child: const Icon(Icons.qr_code_2_rounded, size: 20, color: Color(0xFF0F172A)),
                     ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      const SizedBox(width: 100, child: Text('Total:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18))),
-                      SizedBox(width: 120, child: Text(currencyFormat.format(currentInvoice.total), textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: Color(0xFFF97316)))),
-                    ],
                   ),
                 ],
               ),
             ),
-          ),
-          Container(
-            padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, -5))],
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-            ),
-            child: Column(
-              children: [
-                Row(
+
+            Expanded(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          ref.read(invoiceProvider.notifier).togglePaymentStatus(currentInvoice.id);
-                        },
-                        icon: Icon(currentInvoice.status == 'paid' ? Icons.close : Icons.check_circle),
-                        label: Text(currentInvoice.status == 'paid' ? 'Mark Pending' : 'Mark Paid', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                        style: OutlinedButton.styleFrom(
-                          side: BorderSide(color: currentInvoice.status == 'paid' ? AppColors.border : AppColors.success, width: 2),
-                          foregroundColor: currentInvoice.status == 'paid' ? Colors.black : AppColors.success,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                          fixedSize: const Size.fromHeight(58),
+                    // ── Invoice ID & Status Pill ──
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Text(
+                          'INV-#${currentInvoice.invoiceNumber}',
+                          style: const TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF0F172A),
+                            letterSpacing: -0.6,
+                          ),
                         ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: isPaid ? const Color(0xFFECFDF5) : const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isPaid ? const Color(0xFF10B981).withValues(alpha: 0.3) : const Color(0xFFE2E8F0),
+                            ),
+                          ),
+                          child: Text(
+                            isPaid ? 'Paid' : 'Unpaid',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w800,
+                              color: isPaid ? const Color(0xFF10B981) : const Color(0xFF64748B),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 18),
+
+                    // ── Issued on & Due on Row ──
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Issued on:', style: TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w500)),
+                              const SizedBox(height: 4),
+                              Text(
+                                DateFormat('dd MMM yyyy').format(currentInvoice.issueDate),
+                                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Due on:', style: TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w500)),
+                              const SizedBox(height: 4),
+                              Text(
+                                DateFormat('dd MMM yyyy').format(currentInvoice.dueDate),
+                                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // ── Bill from & Bill to Row (From Mockup) ──
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Bill from
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Bill from', style: TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w500)),
+                              const SizedBox(height: 8),
+                              CircleAvatar(
+                                radius: 20,
+                                backgroundColor: const Color(0xFF0F172A),
+                                child: Text(
+                                  senderName.isNotEmpty ? senderName[0].toUpperCase() : 'J',
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                senderName,
+                                style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                senderAddress,
+                                style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B), height: 1.3),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+
+                        // Bill to
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Bill to', style: TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w500)),
+                              const SizedBox(height: 8),
+                              CircleAvatar(
+                                radius: 20,
+                                backgroundColor: const Color(0xFF0F172A),
+                                child: Text(
+                                  currentInvoice.client.name.isNotEmpty ? currentInvoice.client.name[0].toUpperCase() : 'A',
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                currentInvoice.client.name,
+                                style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                currentInvoice.client.address.isNotEmpty ? currentInvoice.client.address : currentInvoice.client.email,
+                                style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B), height: 1.3),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 26),
+
+                    // ── "Invoice details" Section Title & 3-Dot Indicator ──
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Invoice details',
+                          style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: Color(0xFF64748B)),
+                        ),
+                        if (currentInvoice.items.length > 1)
+                          Row(
+                            children: List.generate(currentInvoice.items.length, (index) {
+                              final isCurrent = _activeItemIndex == index;
+                              return Container(
+                                margin: const EdgeInsets.only(left: 4),
+                                width: isCurrent ? 8 : 6,
+                                height: isCurrent ? 8 : 6,
+                                decoration: BoxDecoration(
+                                  color: isCurrent ? const Color(0xFF0D3B3E) : const Color(0xFFCBD5E1),
+                                  shape: BoxShape.circle,
+                                ),
+                              );
+                            }),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+
+                    // ── Line Items Horizontal Swipeable Carousel (From Mockup) ──
+                    SizedBox(
+                      height: 175,
+                      child: PageView.builder(
+                        controller: _pageController,
+                        physics: const BouncingScrollPhysics(),
+                        itemCount: currentInvoice.items.length,
+                        onPageChanged: (idx) => setState(() => _activeItemIndex = idx),
+                        itemBuilder: (ctx, index) {
+                          final item = currentInvoice.items[index];
+                          final itemTotal = item.quantity * item.price;
+
+                          return Container(
+                            margin: const EdgeInsets.only(right: 12),
+                            padding: const EdgeInsets.all(18),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.02),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Description', style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B), fontWeight: FontWeight.w500)),
+                                const SizedBox(height: 2),
+                                Text(
+                                  item.name,
+                                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Color(0xFF0F172A)),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 14),
+
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const Text('Quantity', style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B), fontWeight: FontWeight.w500)),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            item.quantity.toString(),
+                                            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Color(0xFF0F172A)),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const Text('Unit per-price', style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B), fontWeight: FontWeight.w500)),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            currencyFormat.format(item.price),
+                                            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Color(0xFF0F172A)),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const Spacer(),
+
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Text('Total price', style: TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w500)),
+                                    Text(
+                                      currencyFormat.format(itemTotal),
+                                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Color(0xFF0F172A)),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          );
+                        },
                       ),
                     ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () async {
-                          final text = 'Hello ${currentInvoice.client.name}, here is your latest invoice (${currentInvoice.invoiceNumber}) for ${currencyFormat.format(currentInvoice.total)}. Thank you for your business!';
-                          final uri = Uri.parse('whatsapp://send?text=${Uri.encodeComponent(text)}');
-                          if (await canLaunchUrl(uri)) {
-                            await launchUrl(uri);
-                          } else {
-                            PdfService.shareInvoice(currentInvoice, profile);
-                          }
-                        },
-                        icon: const Icon(Icons.send_rounded, color: Colors.white),
-                        label: const Text('WhatsApp', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF25D366),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                          fixedSize: const Size.fromHeight(58),
-                        ),
+
+                    const SizedBox(height: 18),
+
+                    // ── Calculation Breakdown (Subtotal, Tax, Discount, Grand Total) ──
+                    Container(
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(22),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Column(
+                        children: [
+                          _buildSummaryLine('Subtotal', currencyFormat.format(subtotal)),
+                          const SizedBox(height: 8),
+                          _buildSummaryLine('Tax (${currentInvoice.taxPercentage.toInt()}%)', currencyFormat.format(taxAmount)),
+                          if (discountAmount > 0) ...[
+                            const SizedBox(height: 8),
+                            _buildSummaryLine('Discount', '-${currencyFormat.format(discountAmount)}'),
+                          ],
+                          const SizedBox(height: 12),
+                          const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                          const SizedBox(height: 12),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'Grand total',
+                                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15.5, color: Color(0xFF0F172A)),
+                              ),
+                              Text(
+                                currencyFormat.format(grandTotal),
+                                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: Color(0xFF0F172A)),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
+
+                    const SizedBox(height: 30),
                   ],
                 ),
-              ],
+              ),
             ),
-          ),
-        ],
+
+            // ── Sticky Bottom Buttons Row (Download invoice + Share invoice) ──
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: const Border(top: BorderSide(color: Color(0xFFE2E8F0))),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.04),
+                    blurRadius: 10,
+                    offset: const Offset(0, -2),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  // Download invoice button
+                  Expanded(
+                    child: SizedBox(
+                      height: 52,
+                      child: OutlinedButton(
+                        onPressed: () => PdfService.printInvoice(currentInvoice, profile),
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          side: const BorderSide(color: Color(0xFFE2E8F0)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+                        ),
+                        child: const Text(
+                          'Download invoice',
+                          style: TextStyle(
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF0F172A),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+
+                  // Share invoice Lime button
+                  Expanded(
+                    child: SizedBox(
+                      height: 52,
+                      child: ElevatedButton(
+                        onPressed: () => ShareInvoiceBottomSheet.show(context, invoice: currentInvoice, profile: profile),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF9BD71B),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+                          elevation: 0,
+                        ),
+                        child: const Text(
+                          'Share invoice',
+                          style: TextStyle(
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF0F172A),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
+    );
+  }
+
+  Widget _buildSummaryLine(String title, String value) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(title, style: const TextStyle(fontSize: 13, color: Color(0xFF64748B), fontWeight: FontWeight.w500)),
+        Text(value, style: const TextStyle(fontSize: 13.5, color: Color(0xFF0F172A), fontWeight: FontWeight.w700)),
+      ],
     );
   }
 }

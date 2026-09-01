@@ -27,13 +27,16 @@ class InvoiceAdapter extends TypeAdapter<Invoice> {
       discount: fields[7] as double,
       status: fields[8] as String,
       notes: fields[9] as String,
+      isRecurring: fields[10] as bool? ?? false,
+      recurringInterval: fields[11] as String? ?? 'monthly',
+      nextRecurringDate: fields[12] as DateTime?,
     );
   }
 
   @override
   void write(BinaryWriter writer, Invoice obj) {
     writer
-      ..writeByte(10)
+      ..writeByte(13)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -53,7 +56,13 @@ class InvoiceAdapter extends TypeAdapter<Invoice> {
       ..writeByte(8)
       ..write(obj.status)
       ..writeByte(9)
-      ..write(obj.notes);
+      ..write(obj.notes)
+      ..writeByte(10)
+      ..write(obj.isRecurring)
+      ..writeByte(11)
+      ..write(obj.recurringInterval)
+      ..writeByte(12)
+      ..write(obj.nextRecurringDate);
   }
 
   @override

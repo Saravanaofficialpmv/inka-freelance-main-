@@ -7,42 +7,6 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:605207323939:android:13bbca92329a12b0375896",
-        "android_client_info": {
-          "package_name": "com.example.inka"
-        }
-      },
-      "oauth_client": [
-        {
-          "client_id": "605207323939-afos8vflkq6evad2img0b9cpcupk6lhe.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
-      "api_key": [
-        {
-          "current_key": "AIzaSyAupC2hax7bx0KJNURbovkq3Lz_DW6a_d0"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "605207323939-afos8vflkq6evad2img0b9cpcupk6lhe.apps.googleusercontent.com",
-              "client_type": 3
-            },
-            {
-              "client_id": "605207323939-dsvlcmlr9npt2qp77taggivbjcqqp5ps.apps.googleusercontent.com",
-              "client_type": 2,
-              "ios_info": {
-                "bundle_id": "com.example.invoiceGenerator"
-              }
-            }
-          ]
-        }
-      }
-    },
-    {
-      "client_info": {
         "mobilesdk_app_id": "1:605207323939:android:c61f3b8a693346eb375896",
         "android_client_info": {
           "package_name": "com.inka.app"

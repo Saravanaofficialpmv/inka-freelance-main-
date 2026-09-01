@@ -3,16 +3,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
 import '../providers/auth_provider.dart';
-import '../../data/models/invoice.dart';
 import '../viewmodels/invoice_viewmodel.dart';
 import '../providers/profile_provider.dart';
 import '../../data/models/business_profile.dart';
-import 'package:inka/core/constants/colors.dart';
 import '../../core/localization/app_localizations.dart';
 import '../providers/locale_provider.dart';
+import '../providers/subscription_provider.dart';
+import '../widgets/currency_tax_sheet.dart';
+import '../widgets/payment_qr_sheet.dart';
+import '../../services/currency_tax_service.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -26,10 +27,11 @@ class ProfileScreen extends ConsumerWidget {
     final invoices = ref.watch(invoiceProvider);
     final totalInvoices = invoices.length;
     final totalRevenue = invoices.fold(0.0, (sum, item) => sum + item.total);
-    final currencyFormat = NumberFormat.simpleCurrency(decimalDigits: 0, name: businessProfile.currency);
+    final subscription = ref.watch(subscriptionProvider);
+    final currencyFormat = CurrencyTaxService.getCurrencyFormatter(currencyCode: businessProfile.currency, decimalDigits: 0);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: const Color(0xFFF8F9FA),
       body: SafeArea(
         child: CustomScrollView(
           physics: const BouncingScrollPhysics(),
@@ -37,19 +39,31 @@ class ProfileScreen extends ConsumerWidget {
             // ── Header ──
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+                padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(AppLocalizations.of(context)?.translate('profile') ?? 'Profile', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black)),
+                    Text(
+                      AppLocalizations.of(context)?.translate('profile') ?? 'Profile',
+                      style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
+                    ),
                     GestureDetector(
-                      onTap: () {
-                        _showAdvancedSettings(context);
-                      },
+                      onTap: () => _showAdvancedSettings(context),
                       child: Container(
                         padding: const EdgeInsets.all(8),
-                        decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                        child: const Icon(Icons.more_horiz, color: Colors.black, size: 20),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.04),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(Icons.more_horiz, color: Color(0xFF0F172A), size: 20),
                       ),
                     )
                   ],
@@ -59,18 +73,19 @@ class ProfileScreen extends ConsumerWidget {
 
             // ── Business Profile Card ──
             SliverPadding(
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.all(20),
               sliver: SliverToBoxAdapter(
                 child: Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 15,
-                        offset: const Offset(0, 8),
+                        color: Colors.black.withValues(alpha: 0.04),
+                        blurRadius: 18,
+                        offset: const Offset(0, 6),
                       )
                     ],
                   ),
@@ -80,10 +95,10 @@ class ProfileScreen extends ConsumerWidget {
                         children: [
                           CircleAvatar(
                             radius: 30,
-                            backgroundColor: AppColors.primary.withOpacity(0.1),
+                            backgroundColor: const Color(0xFFFFECE8),
                             child: Text(
                               (businessProfile.businessName.isNotEmpty ? businessProfile.businessName[0] : displayName[0]).toUpperCase(),
-                              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.primary),
+                              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFFFF5722)),
                             ),
                           ),
                           const SizedBox(width: 16),
@@ -93,30 +108,37 @@ class ProfileScreen extends ConsumerWidget {
                               children: [
                                 Text(
                                   businessProfile.businessName.isNotEmpty ? businessProfile.businessName : 'Set Business Name',
-                                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black),
+                                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
                                 ),
                                 Text(
                                   user?.email ?? 'Free User Account',
-                                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                                  style: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
                                 ),
                               ],
                             ),
                           ),
                           IconButton(
                             onPressed: () => _showEditBusinessDialog(context, ref, businessProfile),
-                            icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 28),
+                            icon: const Icon(Icons.edit_note, color: Color(0xFFFF5722), size: 28),
                           ),
                         ],
                       ),
                       const SizedBox(height: 20),
-                      const Divider(color: AppColors.border),
+                      const Divider(color: Color(0xFFE2E8F0)),
                       const SizedBox(height: 16),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
                           _StatItem(label: 'Total Rev', value: currencyFormat.format(totalRevenue)),
                           _StatItem(label: 'Invoices', value: '$totalInvoices'),
-                          const _StatItem(label: 'Status', value: 'Premium', color: AppColors.primary),
+                          GestureDetector(
+                            onTap: () => context.push('/subscription'),
+                            child: _StatItem(
+                              label: 'Plan',
+                              value: subscription.plan.name,
+                              color: const Color(0xFFFF5722),
+                            ),
+                          ),
                         ],
                       )
                     ],
@@ -127,13 +149,33 @@ class ProfileScreen extends ConsumerWidget {
 
             // ── Main Options ──
             SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
               sliver: SliverToBoxAdapter(
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 8),
-                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24)),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.03),
+                        blurRadius: 10,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
                   child: Column(
                     children: [
+                      // Subscription & Pricing Plans Tile
+                      _ProfileTile(
+                        icon: Icons.workspace_premium_rounded,
+                        title: 'Plan: ${subscription.plan.name} (${subscription.plan.badge})',
+                        subtitle: subscription.isFree
+                            ? 'Tap to explore Pro (₹99/mo) & Freelancer Plus'
+                            : 'Active subscription • Tap to manage',
+                        onTap: () => context.push('/subscription'),
+                      ),
                       _ProfileTile(
                         icon: Icons.business_outlined, 
                         title: AppLocalizations.of(context)?.translate('business_settings') ?? 'Business Information', 
@@ -141,10 +183,26 @@ class ProfileScreen extends ConsumerWidget {
                         onTap: () => _showEditBusinessDialog(context, ref, businessProfile),
                       ),
                       _ProfileTile(
-                        icon: Icons.receipt_long_outlined, 
-                        title: AppLocalizations.of(context)?.translate('invoices') ?? 'Invoices Summary', 
-                        subtitle: 'View detailed performance',
-                        onTap: () => context.go('/history'),
+                        icon: Icons.people_outline_rounded, 
+                        title: AppLocalizations.of(context)?.translate('clients') ?? 'Clients Directory', 
+                        subtitle: 'Manage client contacts and details',
+                        onTap: () => context.push('/clients'),
+                      ),
+                      _ProfileTile(
+                        icon: Icons.inventory_2_outlined, 
+                        title: AppLocalizations.of(context)?.translate('product_catalog') ?? 'Services & Catalog', 
+                        subtitle: AppLocalizations.of(context)?.translate('manage_inventory') ?? 'Manage items and services',
+                        onTap: () => context.push('/products'),
+                      ),
+                      _ProfileTile(
+                        icon: Icons.account_balance_outlined, 
+                        title: AppLocalizations.of(context)?.translate('bank_details') ?? 'Bank & UPI Payments', 
+                        subtitle: (businessProfile.upiId != null && businessProfile.upiId!.isNotEmpty)
+                            ? 'UPI: ${businessProfile.upiId}'
+                            : (businessProfile.accountNo != null && businessProfile.accountNo!.length >= 4)
+                                ? 'A/C: ****${businessProfile.accountNo!.substring(businessProfile.accountNo!.length - 4)}'
+                                : AppLocalizations.of(context)?.translate('manage_bank') ?? 'Manage bank and UPI QR details',
+                        onTap: () => _showEditBankDetailsDialog(context, ref, businessProfile),
                       ),
                       _ProfileTile(
                         icon: Icons.draw_outlined, 
@@ -153,20 +211,16 @@ class ProfileScreen extends ConsumerWidget {
                         onTap: () => _showEditSignaturesDialog(context, ref, businessProfile),
                       ),
                       _ProfileTile(
-                        icon: Icons.account_balance_outlined, 
-                        title: AppLocalizations.of(context)?.translate('bank_details') ?? 'Bank & Digital Payments', 
-                        subtitle: (businessProfile.accountNo != null && businessProfile.accountNo!.length >= 4)
-                          ? 'A/C: ****${businessProfile.accountNo!.substring(businessProfile.accountNo!.length - 4)}'
-                          : (businessProfile.accountNo != null && businessProfile.accountNo!.isNotEmpty)
-                            ? 'A/C: ${businessProfile.accountNo}'
-                            : AppLocalizations.of(context)?.translate('manage_bank') ?? 'Manage bank and UPI details',
-                        onTap: () => _showEditBankDetailsDialog(context, ref, businessProfile),
+                        icon: Icons.currency_exchange_rounded, 
+                        title: 'Currency (${businessProfile.currency})', 
+                        subtitle: 'Change display and invoice currency',
+                        onTap: () => CurrencySelectionBottomSheet.show(context, businessProfile),
                       ),
                       _ProfileTile(
-                        icon: Icons.inventory_2_outlined, 
-                        title: AppLocalizations.of(context)?.translate('product_catalog') ?? 'Product Catalog', 
-                        subtitle: AppLocalizations.of(context)?.translate('manage_inventory') ?? 'Manage items and services',
-                        onTap: () => context.push('/products'),
+                        icon: Icons.percent_rounded, 
+                        title: 'Tax & Compliance (${businessProfile.taxLabel})', 
+                        subtitle: '${businessProfile.taxLabel} • ${businessProfile.defaultTaxRate}% standard rate',
+                        onTap: () => TaxSettingsBottomSheet.show(context, businessProfile),
                       ),
                       _ProfileTile(
                         icon: Icons.language, 
@@ -183,11 +237,22 @@ class ProfileScreen extends ConsumerWidget {
 
             // ── Bottom Options ──
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 160),
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 140),
               sliver: SliverToBoxAdapter(
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 8),
-                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24)),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.03),
+                        blurRadius: 10,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
                   child: Column(
                     children: [
                       _ProfileTile(
@@ -208,7 +273,8 @@ class ProfileScreen extends ConsumerWidget {
                       _ProfileTile(
                         icon: Icons.logout, 
                         title: AppLocalizations.of(context)?.translate('logout') ?? 'Logout', 
-                       onTap: () async {
+                        isLast: true,
+                        onTap: () async {
                           await ref.read(authProvider.notifier).signOut();
                           if (context.mounted) context.go('/auth');
                         },
@@ -239,20 +305,20 @@ class ProfileScreen extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Select Language', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black)),
-            const SizedBox(height: 24),
+            const Text('Select Language', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+            const SizedBox(height: 20),
             ...languages.map((lang) => ListTile(
               leading: Text(lang.flag, style: const TextStyle(fontSize: 24)),
-              title: Text(lang.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+              title: Text(lang.name, style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
               trailing: ref.watch(localeProvider).languageCode == lang.code 
-                ? const Icon(Icons.check_circle, color: AppColors.primary) 
+                ? const Icon(Icons.check_circle, color: Color(0xFFFF5722)) 
                 : null,
               onTap: () {
                 ref.read(localeProvider.notifier).setLocale(Locale(lang.code));
                 Navigator.pop(ctx);
               },
             )),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
           ],
         ),
       ),
@@ -270,17 +336,19 @@ class ProfileScreen extends ConsumerWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(AppLocalizations.of(context)?.translate('advanced_settings') ?? 'Advanced Settings', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black)),
+            Text(AppLocalizations.of(context)?.translate('advanced_settings') ?? 'Advanced Settings', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
             const SizedBox(height: 16),
             ListTile(
-              leading: const Icon(Icons.info_outline, color: Colors.black),
-              title: Text(AppLocalizations.of(context)?.translate('about_app') ?? 'About App', style: const TextStyle(color: Colors.black)),
+              leading: const Icon(Icons.info_outline, color: Color(0xFF0F172A)),
+              title: Text(AppLocalizations.of(context)?.translate('about_app') ?? 'About App', style: const TextStyle(color: Color(0xFF0F172A))),
               onTap: () {
                 Navigator.pop(context);
                 showDialog(context: context, builder: (_) => AlertDialog(
-                  title: const Text('Inka'),
-                  content: Text('${AppLocalizations.of(context)?.translate('version') ?? 'Version'} 1.0.0\nCreated using Flutter.'),
-                  actions: [TextButton(onPressed: () => Navigator.pop(context), child: Text(AppLocalizations.of(context)?.translate('close') ?? 'Close'))],
+                  backgroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  title: const Text('Inka', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold)),
+                  content: Text('${AppLocalizations.of(context)?.translate('version') ?? 'Version'} 1.0.0\nCreated using Flutter.', style: const TextStyle(color: Color(0xFF64748B))),
+                  actions: [TextButton(onPressed: () => Navigator.pop(context), child: Text(AppLocalizations.of(context)?.translate('close') ?? 'Close', style: const TextStyle(color: Color(0xFFFF5722))))],
                 ));
               },
             ),
@@ -300,25 +368,31 @@ class ProfileScreen extends ConsumerWidget {
 
   void _showSupportDialog(BuildContext context) {
     showDialog(context: context, builder: (_) => AlertDialog(
-      title: Text(AppLocalizations.of(context)?.translate('help_support') ?? 'Help & Support'),
-      content: const Text('Contact us at: support@inka.com'),
-      actions: [TextButton(onPressed: () => Navigator.pop(context), child: Text(AppLocalizations.of(context)?.translate('close') ?? 'Close'))],
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Text(AppLocalizations.of(context)?.translate('help_support') ?? 'Help & Support', style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold)),
+      content: const Text('Contact us at: support@inka.com', style: TextStyle(color: Color(0xFF64748B))),
+      actions: [TextButton(onPressed: () => Navigator.pop(context), child: Text(AppLocalizations.of(context)?.translate('close') ?? 'Close', style: const TextStyle(color: Color(0xFFFF5722))))],
     ));
   }
 
   void _showPrivacyPolicy(BuildContext context) {
     showDialog(context: context, builder: (_) => AlertDialog(
-      title: Text(AppLocalizations.of(context)?.translate('privacy_policy') ?? 'Privacy Policy'),
-      content: const Text('Your data is securely synced via our backend.'),
-      actions: [TextButton(onPressed: () => Navigator.pop(context), child: Text(AppLocalizations.of(context)?.translate('close') ?? 'Close'))],
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Text(AppLocalizations.of(context)?.translate('privacy_policy') ?? 'Privacy Policy', style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold)),
+      content: const Text('Your data is securely synced via our backend.', style: TextStyle(color: Color(0xFF64748B))),
+      actions: [TextButton(onPressed: () => Navigator.pop(context), child: Text(AppLocalizations.of(context)?.translate('close') ?? 'Close', style: const TextStyle(color: Color(0xFFFF5722))))],
     ));
   }
 
   void _showTermsDialog(BuildContext context) {
     showDialog(context: context, builder: (_) => AlertDialog(
-      title: Text(AppLocalizations.of(context)?.translate('terms_conditions') ?? 'Terms & Conditions'),
-      content: const Text('By using Inka, you agree to our standard terms.'),
-      actions: [TextButton(onPressed: () => Navigator.pop(context), child: Text(AppLocalizations.of(context)?.translate('close') ?? 'Close'))],
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Text(AppLocalizations.of(context)?.translate('terms_conditions') ?? 'Terms & Conditions', style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold)),
+      content: const Text('By using Inka, you agree to our standard terms.', style: TextStyle(color: Color(0xFF64748B))),
+      actions: [TextButton(onPressed: () => Navigator.pop(context), child: Text(AppLocalizations.of(context)?.translate('close') ?? 'Close', style: const TextStyle(color: Color(0xFFFF5722))))],
     ));
   }
 
@@ -349,7 +423,7 @@ class ProfileScreen extends ConsumerWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(AppLocalizations.of(context)?.translate('signatures') ?? 'Signatures', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black)),
+                  Text(AppLocalizations.of(context)?.translate('signatures') ?? 'Signatures', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
                   TextButton.icon(
                     onPressed: () async {
                       try {
@@ -364,30 +438,31 @@ class ProfileScreen extends ConsumerWidget {
                          debugPrint('Image pick error: $e');
                       }
                     },
-                    icon: const Icon(Icons.add, size: 18, color: AppColors.primary),
-                    label: Text(AppLocalizations.of(context)?.translate('add_new') ?? 'Add New', style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+                    icon: const Icon(Icons.add, size: 18, color: Color(0xFFFF5722)),
+                    label: Text(AppLocalizations.of(context)?.translate('add_new') ?? 'Add New', style: const TextStyle(color: Color(0xFFFF5722), fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
-              const Text('Manage your business signatures', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+              const Text('Manage your business signatures', style: TextStyle(color: Color(0xFF64748B), fontSize: 13)),
               const SizedBox(height: 24),
               
               if (selectedSignPath != null && selectedSignPath!.isNotEmpty)
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: AppColors.background,
+                    color: const Color(0xFFF8FAFC),
                     borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
                   ),
                   child: Row(
                     children: [
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Official Signature', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
-                            const SizedBox(height: 4),
-                            const Text('Active on all invoices', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                          children: const [
+                            Text('Official Signature', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                            SizedBox(height: 4),
+                            Text('Active on all invoices', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
                           ],
                         ),
                       ),
@@ -397,7 +472,7 @@ class ProfileScreen extends ConsumerWidget {
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppColors.border),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
                         ),
                         child: (!kIsWeb && selectedSignPath != null && selectedSignPath!.isNotEmpty && File(selectedSignPath!).existsSync())
                           ? Image.file(File(selectedSignPath!), fit: BoxFit.contain)
@@ -415,19 +490,19 @@ class ProfileScreen extends ConsumerWidget {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 32),
                     child: Column(
-                      children: [
-                        Icon(Icons.draw_outlined, size: 48, color: Colors.grey[300]),
-                        const SizedBox(height: 8),
-                        const Text('No signature added', style: TextStyle(color: AppColors.textSecondary)),
+                      children: const [
+                        Icon(Icons.draw_outlined, size: 48, color: Color(0xFFCBD5E1)),
+                        SizedBox(height: 8),
+                        Text('No signature added', style: TextStyle(color: Color(0xFF64748B))),
                       ],
                     ),
                   ),
                 ),
               
-              const SizedBox(height: 32),
+              const SizedBox(height: 28),
               SizedBox(
                 width: double.infinity,
-                height: 56,
+                height: 54,
                 child: ElevatedButton(
                   onPressed: () {
                     final newProfile = profile.copyWith(signatureUrl: selectedSignPath);
@@ -435,7 +510,7 @@ class ProfileScreen extends ConsumerWidget {
                     Navigator.pop(ctx);
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.black,
+                    backgroundColor: const Color(0xFFFF5722),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   ),
                   child: Text(AppLocalizations.of(context)?.translate('save_changes') ?? 'Save Changes', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -480,9 +555,9 @@ class ProfileScreen extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(AppLocalizations.of(context)?.translate('bank_details') ?? 'Bank Details', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black)),
-                const Text('Configure payment information', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-                const SizedBox(height: 24),
+                Text(AppLocalizations.of(context)?.translate('bank_details') ?? 'Bank Details', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                const Text('Configure payment information', style: TextStyle(color: Color(0xFF64748B), fontSize: 13)),
+                const SizedBox(height: 20),
                 
                 _buildFieldLabel(AppLocalizations.of(context)?.translate('account_holder') ?? 'Account Holder'),
                 _buildTextField(holderNameController, 'Name as per bank'),
@@ -525,7 +600,7 @@ class ProfileScreen extends ConsumerWidget {
                           });
                         }
                       },
-                      child: const Text('Fetch', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+                      child: const Text('Fetch', style: TextStyle(color: Color(0xFFFF5722), fontWeight: FontWeight.bold)),
                     )
                   ],
                 ),
@@ -535,11 +610,30 @@ class ProfileScreen extends ConsumerWidget {
                 
                 _buildFieldLabel(AppLocalizations.of(context)?.translate('upi_id') ?? 'UPI ID (Optional)'),
                 _buildTextField(upiIdController, 'e.g. user@bank'),
+                const SizedBox(height: 12),
+
+                // Test & Generate Payment QR Button
+                OutlinedButton.icon(
+                  onPressed: () {
+                    final currentProfile = profile.copyWith(
+                      upiId: upiIdController.text,
+                      accountHolderName: holderNameController.text,
+                    );
+                    PaymentQrSheet.show(context, profile: currentProfile);
+                  },
+                  icon: const Icon(Icons.qr_code_2_rounded, size: 18, color: Color(0xFFFF5722)),
+                  label: const Text('Generate & Test Payment QR', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFFF5722))),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFFFF5722)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                  ),
+                ),
                 
-                const SizedBox(height: 32),
+                const SizedBox(height: 24),
                 SizedBox(
                   width: double.infinity,
-                  height: 56,
+                  height: 54,
                   child: ElevatedButton(
                     onPressed: () {
                       if (accountNoController.text != confirmAccountNoController.text) {
@@ -559,7 +653,7 @@ class ProfileScreen extends ConsumerWidget {
                       Navigator.pop(ctx);
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.black,
+                      backgroundColor: const Color(0xFFFF5722),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     ),
                     child: Text(AppLocalizations.of(context)?.translate('save') ?? 'Save Details', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -575,8 +669,8 @@ class ProfileScreen extends ConsumerWidget {
 
   Widget _buildFieldLabel(String label) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0, top: 12.0),
-      child: Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87)),
+      padding: const EdgeInsets.only(bottom: 6.0, top: 10.0),
+      child: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
     );
   }
 
@@ -586,14 +680,16 @@ class ProfileScreen extends ConsumerWidget {
       child: TextField(
         controller: controller,
         obscureText: isObscure,
-        style: const TextStyle(color: Colors.black, fontSize: 14),
+        style: const TextStyle(color: Color(0xFF0F172A), fontSize: 14),
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: const TextStyle(color: Colors.black26, fontSize: 13),
-          fillColor: AppColors.background,
+          hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+          fillColor: const Color(0xFFF8FAFC),
           filled: true,
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFFF5722), width: 1.5)),
         ),
       ),
     );
@@ -622,7 +718,7 @@ class ProfileScreen extends ConsumerWidget {
             top: 24,
           ),
         decoration: const BoxDecoration(
-          color: Colors.white, // WHITE background for the modal
+          color: Colors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
         ),
         child: SingleChildScrollView(
@@ -630,11 +726,10 @@ class ProfileScreen extends ConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Black text on white background
-              Text(AppLocalizations.of(context)?.translate('business_settings') ?? 'Business Settings', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black)),
+              Text(AppLocalizations.of(context)?.translate('business_settings') ?? 'Business Settings', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
               const SizedBox(height: 4),
-              const Text('This information will appear on your invoices', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-              const SizedBox(height: 24),
+              const Text('This information will appear on your invoices', style: TextStyle(color: Color(0xFF64748B), fontSize: 13)),
+              const SizedBox(height: 20),
               Center(
                 child: GestureDetector(
                   onTap: () async {
@@ -650,108 +745,121 @@ class ProfileScreen extends ConsumerWidget {
                     height: 80,
                     width: 80,
                     decoration: BoxDecoration(
-                      color: AppColors.background,
+                      color: const Color(0xFFF8FAFC),
                       borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
                       image: selectedLogoPath != null 
                         ? DecorationImage(image: FileImage(File(selectedLogoPath!)), fit: BoxFit.cover) 
                         : null,
                     ),
                     child: selectedLogoPath == null 
-                      ? const Icon(Icons.add_a_photo, color: AppColors.textSecondary)
+                      ? const Icon(Icons.add_a_photo_outlined, color: Color(0xFF64748B))
                       : null,
                   ),
                 ),
               ),
               const SizedBox(height: 8),
-              const Center(child: Text('Tap to upload logo', style: TextStyle(color: AppColors.textSecondary, fontSize: 12))),
-              const SizedBox(height: 24),
+              const Center(child: Text('Tap to upload logo', style: TextStyle(color: Color(0xFF64748B), fontSize: 12))),
+              const SizedBox(height: 20),
               TextField(
                 controller: nameController,
-                style: const TextStyle(color: Colors.black), // Black text while typing
+                style: const TextStyle(color: Color(0xFF0F172A)),
                 decoration: InputDecoration(
                   labelText: 'Business Name',
-                  labelStyle: const TextStyle(color: AppColors.textSecondary),
-                  fillColor: AppColors.background,
+                  labelStyle: const TextStyle(color: Color(0xFF64748B)),
+                  fillColor: const Color(0xFFF8FAFC),
                   filled: true,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFFF5722), width: 1.5)),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               TextField(
                 controller: addressController,
                 maxLines: 2,
-                style: const TextStyle(color: Colors.black),
+                style: const TextStyle(color: Color(0xFF0F172A)),
                 decoration: InputDecoration(
                   labelText: 'Address',
-                  labelStyle: const TextStyle(color: AppColors.textSecondary),
-                  fillColor: AppColors.background,
+                  labelStyle: const TextStyle(color: Color(0xFF64748B)),
+                  fillColor: const Color(0xFFF8FAFC),
                   filled: true,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFFF5722), width: 1.5)),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               Row(
                 children: [
                   Expanded(
                     child: TextField(
                       controller: phoneController,
-                      style: const TextStyle(color: Colors.black),
+                      style: const TextStyle(color: Color(0xFF0F172A)),
                       decoration: InputDecoration(
                         labelText: 'Phone',
-                        labelStyle: const TextStyle(color: AppColors.textSecondary),
-                        fillColor: AppColors.background,
+                        labelStyle: const TextStyle(color: Color(0xFF64748B)),
+                        fillColor: const Color(0xFFF8FAFC),
                         filled: true,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFFF5722), width: 1.5)),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 14),
                   Expanded(
                     child: TextField(
                       controller: emailController,
-                      style: const TextStyle(color: Colors.black),
+                      style: const TextStyle(color: Color(0xFF0F172A)),
                       decoration: InputDecoration(
                         labelText: 'Email',
-                        labelStyle: const TextStyle(color: AppColors.textSecondary),
-                        fillColor: AppColors.background,
+                        labelStyle: const TextStyle(color: Color(0xFF64748B)),
+                        fillColor: const Color(0xFFF8FAFC),
                         filled: true,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFFF5722), width: 1.5)),
                       ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               DropdownButtonFormField<String>(
                 initialValue: selectedCurrency,
-                style: const TextStyle(color: Colors.black, fontSize: 16),
+                style: const TextStyle(color: Color(0xFF0F172A), fontSize: 16),
                 dropdownColor: Colors.white,
                 decoration: InputDecoration(
                   labelText: 'Currency',
-                  labelStyle: const TextStyle(color: AppColors.textSecondary),
-                  fillColor: AppColors.background,
+                  labelStyle: const TextStyle(color: Color(0xFF64748B)),
+                  fillColor: const Color(0xFFF8FAFC),
                   filled: true,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFFF5722), width: 1.5)),
                 ),
-                items: ['\$', '₹', '€', '£', '¥'].map((c) => DropdownMenuItem(value: c, child: Text(c, style: const TextStyle(color: Colors.black)))).toList(),
+                items: ['\$', '₹', '€', '£', '¥'].map((c) => DropdownMenuItem(value: c, child: Text(c, style: const TextStyle(color: Color(0xFF0F172A))))).toList(),
                 onChanged: (v) => selectedCurrency = v!,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               TextField(
                 controller: gstController,
-                style: const TextStyle(color: Colors.black),
+                style: const TextStyle(color: Color(0xFF0F172A)),
                 decoration: InputDecoration(
                   labelText: 'GST Number (Optional)',
-                  labelStyle: const TextStyle(color: AppColors.textSecondary),
-                  fillColor: AppColors.background,
+                  labelStyle: const TextStyle(color: Color(0xFF64748B)),
+                  fillColor: const Color(0xFFF8FAFC),
                   filled: true,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFFF5722), width: 1.5)),
                 ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 28),
               SizedBox(
                 width: double.infinity,
-                height: 56,
+                height: 54,
                 child: ElevatedButton(
                   onPressed: () {
                     final newProfile = profile.copyWith(
@@ -767,7 +875,7 @@ class ProfileScreen extends ConsumerWidget {
                     Navigator.pop(context);
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary, // Orange button
+                    backgroundColor: const Color(0xFFFF5722),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   ),
                   child: const Text('Save Business Settings', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -782,13 +890,13 @@ class ProfileScreen extends ConsumerWidget {
   }
 }
 
-// ── StatItem: White card → Black text ──
+// ── StatItem: Clean White Card Item ──
 class _StatItem extends StatelessWidget {
   final String label;
   final String value;
   final Color color;
 
-  const _StatItem({required this.label, required this.value, this.color = Colors.black});
+  const _StatItem({required this.label, required this.value, this.color = const Color(0xFF0F172A)});
 
   @override
   Widget build(BuildContext context) {
@@ -796,13 +904,13 @@ class _StatItem extends StatelessWidget {
       children: [
         Text(value, style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.bold)),
         const SizedBox(height: 4),
-        Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+        Text(label, style: const TextStyle(color: Color(0xFF64748B), fontSize: 11.5)),
       ],
     );
   }
 }
 
-// ── ProfileTile: White card → Black text ──
+// ── ProfileTile: Clean White List Tile ──
 class _ProfileTile extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -818,237 +926,12 @@ class _ProfileTile extends StatelessWidget {
       children: [
         ListTile(
           onTap: onTap,
-          leading: Icon(icon, color: AppColors.textSecondary),
-          title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: Colors.black)),
-          subtitle: subtitle != null ? Text(subtitle!, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)) : null,
-          trailing: const Icon(Icons.chevron_right, color: AppColors.textSecondary),
+          leading: Icon(icon, color: const Color(0xFF64748B)),
+          title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5, color: Color(0xFF0F172A))),
+          subtitle: subtitle != null ? Text(subtitle!, style: const TextStyle(color: Color(0xFF64748B), fontSize: 12)) : null,
+          trailing: const Icon(Icons.chevron_right, color: Color(0xFF94A3B8)),
         ),
-        if (!isLast) const Divider(height: 1, indent: 64, endIndent: 20),
-      ],
-    );
-  }
-}
-
-// ══════════════════════════════════════════════
-// Invoice History Screen
-// ══════════════════════════════════════════════
-
-class InvoicesHistoryScreen extends ConsumerStatefulWidget {
-  const InvoicesHistoryScreen({super.key});
-
-  @override
-  ConsumerState<InvoicesHistoryScreen> createState() => _InvoicesHistoryScreenState();
-}
-
-class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
-  String _searchQuery = '';
-
-  @override
-  Widget build(BuildContext context) {
-    final invoices = ref.watch(invoiceProvider);
-    final profile = ref.watch(profileProvider);
-    final currencyFormat = NumberFormat.simpleCurrency(name: profile.currency, decimalDigits: 0);
-    final filteredInvoices = invoices.where((inv) => 
-      inv.client.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-      inv.invoiceNumber.toLowerCase().contains(_searchQuery.toLowerCase())
-    ).toList();
-
-    final now = DateTime.now();
-    final todayCount = invoices.where((inv) => 
-      inv.issueDate.year == now.year && 
-      inv.issueDate.month == now.month && 
-      inv.issueDate.day == now.day
-    ).length;
-
-    return Scaffold(
-      backgroundColor: AppColors.background, // #F4F4F4 soft grey
-      body: SafeArea(
-        child: Column(
-          children: [
-            // ── Header (light bg → black text) ──
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(AppLocalizations.of(context)?.translate('invoices') ?? 'Invoices', style: const TextStyle(color: Colors.black, fontSize: 24, fontWeight: FontWeight.bold)),
-                      if (todayCount > 0)
-                        Text(
-                          (AppLocalizations.of(context)?.translate('today_count') ?? '{count} Today').replaceFirst('{count}', todayCount.toString()),
-                          style: const TextStyle(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.bold),
-                        ),
-                    ],
-                  ),
-                  TextButton.icon(
-                    onPressed: () => context.push('/create-invoice'),
-                    icon: const Icon(Icons.add, color: AppColors.primary, size: 20),
-                    label: Text(AppLocalizations.of(context)?.translate('create_new') ?? 'Create New', style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
-                  )
-                ],
-              ),
-            ),
-            
-            // ── Search Bar (white card, black text input) ──
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
-                ),
-                child: TextField(
-                  onChanged: (v) => setState(() => _searchQuery = v),
-                  style: const TextStyle(color: Colors.black), // Black text while typing
-                  decoration: InputDecoration(
-                    hintText: AppLocalizations.of(context)?.translate('search') ?? 'Search for Invoice',
-                    prefixIcon: const Icon(Icons.search, color: AppColors.textSecondary),
-                    suffixIcon: const Icon(Icons.tune, color: AppColors.textSecondary),
-                    border: InputBorder.none,
-                    hintStyle: const TextStyle(color: AppColors.textSecondary),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-            
-            // ── Invoice List ──
-            Expanded(
-              child: filteredInvoices.isEmpty
-                ? Center(child: Text(AppLocalizations.of(context)?.translate('no_history') ?? 'No history found', style: const TextStyle(color: AppColors.textSecondary)))
-                : ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 140),
-                    itemCount: filteredInvoices.length,
-                    itemBuilder: (context, index) {
-                      final invoice = filteredInvoices[index];
-                      return _InvoiceCard(invoice: invoice, currencyFormat: currencyFormat);
-                    },
-                  ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── InvoiceCard: White card → Black text ──
-class _InvoiceCard extends ConsumerWidget {
-  final Invoice invoice;
-  final NumberFormat currencyFormat;
-  const _InvoiceCard({required this.invoice, required this.currencyFormat});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    Color statusColor;
-    String statusKey;
-    
-    switch (invoice.status) {
-      case 'paid':
-        statusColor = AppColors.success;
-        statusKey = 'paid';
-        break;
-      case 'overdue':
-        statusColor = AppColors.error;
-        statusKey = 'overdue';
-        break;
-      case 'pending':
-      default:
-        statusColor = AppColors.warning;
-        statusKey = 'pending';
-        break;
-    }
-
-    final statusText = AppLocalizations.of(context)?.translate(statusKey) ?? statusKey.toUpperCase();
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 20),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white, // White card
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))],
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 20,
-                backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-                child: Text(invoice.client.name[0].toUpperCase(), style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(invoice.client.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black)),
-                    Text(invoice.client.email, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                  ],
-                ),
-              ),
-              GestureDetector(
-                onTap: () => ref.read(invoiceProvider.notifier).togglePaymentStatus(invoice.id),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.1), 
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: statusColor.withValues(alpha: 0.2)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(invoice.status == 'paid' ? Icons.check_circle_rounded : Icons.pending_actions_rounded, size: 14, color: statusColor),
-                      const SizedBox(width: 4),
-                      Text(statusText, style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                ),
-              )
-            ],
-          ),
-          const SizedBox(height: 20),
-          const Divider(height: 1, color: AppColors.border),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _InvoiceDetail(label: AppLocalizations.of(context)?.translate('amount') ?? 'Amount', value: currencyFormat.format(invoice.total)),
-              _InvoiceDetail(
-                label: AppLocalizations.of(context)?.translate('no') ?? 'No', 
-                value: invoice.invoiceNumber.length >= 6 
-                  ? '#${invoice.invoiceNumber.substring(invoice.invoiceNumber.length - 6)}'
-                  : '#${invoice.invoiceNumber}'
-              ),
-              _InvoiceDetail(label: AppLocalizations.of(context)?.translate('date') ?? 'Date', value: DateFormat('dd MMM yyyy').format(invoice.issueDate)),
-            ],
-          )
-        ],
-      ),
-    );
-  }
-}
-
-// ── InvoiceDetail: White card → Black text ──
-class _InvoiceDetail extends StatelessWidget {
-  final String label;
-  final String value;
-  const _InvoiceDetail({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 11)),
-        const SizedBox(height: 4),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black)),
+        if (!isLast) const Divider(height: 1, indent: 64, endIndent: 20, color: Color(0xFFE2E8F0)),
       ],
     );
   }
