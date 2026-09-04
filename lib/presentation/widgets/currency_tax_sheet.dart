@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models/business_profile.dart';
 import '../../services/currency_tax_service.dart';
 import '../providers/profile_provider.dart';
+import 'app_search_bar.dart';
 
 // ── Currency Selection Bottom Sheet ──
 class CurrencySelectionBottomSheet extends StatefulWidget {
@@ -89,23 +90,10 @@ class _CurrencySelectionBottomSheetState extends State<CurrencySelectionBottomSh
               const SizedBox(height: 14),
 
               // Search Bar
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                child: TextField(
-                  onChanged: (v) => setState(() => _searchQuery = v),
-                  style: const TextStyle(color: Color(0xFF0F172A), fontSize: 14),
-                  decoration: const InputDecoration(
-                    hintText: 'Search currency name, code (USD, EUR, INR)...',
-                    hintStyle: TextStyle(color: Color(0xFF94A3B8), fontSize: 13.5),
-                    prefixIcon: Icon(Icons.search_rounded, color: Color(0xFF64748B)),
-                    border: InputBorder.none,
-                  ),
-                ),
+              AppSearchBar(
+                hintText: 'Search currency name, code (USD, EUR, INR)...',
+                onChanged: (v) => setState(() => _searchQuery = v),
+                onClear: () => setState(() => _searchQuery = ''),
               ),
               const SizedBox(height: 14),
 

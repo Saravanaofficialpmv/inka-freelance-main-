@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -6,6 +7,12 @@ import '../viewmodels/invoice_viewmodel.dart';
 import '../providers/profile_provider.dart';
 import '../../services/currency_tax_service.dart';
 import '../../data/models/invoice.dart';
+import '../widgets/tibsy_refresh_icon.dart';
+import '../widgets/app_search_bar.dart';
+import '../widgets/status_badge.dart';
+import '../widgets/highlighted_text.dart';
+import '../widgets/search_empty_state.dart';
+import '../widgets/celebration_sparkle.dart';
 import 'create_invoice_screen.dart';
 
 class InvoicesHistoryScreen extends ConsumerStatefulWidget {
@@ -18,7 +25,13 @@ class InvoicesHistoryScreen extends ConsumerStatefulWidget {
 class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
   String _selectedStatusFilter = 'All';
   String _searchQuery = '';
-  bool _isSearchOpen = false;
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   void _showAdviceBottomSheet(List<Invoice> invoices, dynamic currencyFormat) {
     final unpaidInvoices = invoices.where((i) => i.status.toLowerCase() != 'paid').toList();
@@ -52,10 +65,10 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF9BD71B).withValues(alpha: 0.18),
+                    color: const Color(0xFFFF5722).withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.auto_awesome_rounded, color: Color(0xFF7CB518), size: 22),
+                  child: const Icon(Icons.auto_awesome_rounded, color: Color(0xFFFF5722), size: 22),
                 ),
                 const SizedBox(width: 14),
                 const Expanded(
@@ -94,7 +107,7 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
               icon: Icons.qr_code_2_rounded,
               title: 'Include Instant Payment QR',
               description: 'Direct UPI/Bank QR on the invoice PDF eliminates friction for Indian and global clients.',
-              color: const Color(0xFFFF7A00),
+              color: const Color(0xFFFF5722),
             ),
             const SizedBox(height: 24),
             SizedBox(
@@ -103,13 +116,13 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
               child: ElevatedButton(
                 onPressed: () => Navigator.pop(ctx),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF9BD71B),
+                  backgroundColor: const Color(0xFFFF5722),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   elevation: 0,
                 ),
                 child: const Text(
                   'Got it, thanks!',
-                  style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.w900, fontSize: 15),
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 15),
                 ),
               ),
             ),
@@ -196,99 +209,79 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FA),
       body: SafeArea(
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── Top Header Bar ──
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        bottom: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Fixed Top Header Bar & Search Bar ──
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20.0, 12.0, 20.0, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'My Invoices',
-                    style: TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w900,
-                      color: Color(0xFF0F172A),
-                      letterSpacing: -0.6,
-                    ),
-                  ),
+                  // ── Top Header Bar ──
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      GestureDetector(
-                        onTap: () => setState(() => _isSearchOpen = !_isSearchOpen),
-                        child: Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.03),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: const Icon(Icons.search_rounded, size: 20, color: Color(0xFF0F172A)),
+                      const Text(
+                        'My Invoices',
+                        style: TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF0F172A),
+                          letterSpacing: -0.6,
                         ),
                       ),
-                      const SizedBox(width: 10),
                       GestureDetector(
                         onTap: () => CreateInvoiceScreen.showAsBottomSheet(context),
                         child: Container(
                           width: 44,
                           height: 44,
                           decoration: BoxDecoration(
-                            color: const Color(0xFF9BD71B),
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFFFF5722), Color(0xFFFF7A50)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF9BD71B).withValues(alpha: 0.35),
+                                color: const Color(0xFFFF5722).withValues(alpha: 0.35),
                                 blurRadius: 10,
                                 offset: const Offset(0, 3),
                               ),
                             ],
                           ),
-                          child: const Icon(Icons.add_rounded, size: 24, color: Color(0xFF0F172A)),
+                          child: const Icon(Icons.add_rounded, size: 24, color: Colors.white),
                         ),
                       ),
                     ],
                   ),
+
+                  const SizedBox(height: 14),
+
+                  // ── Search Bar ──
+                  AppSearchBar(
+                    controller: _searchController,
+                    hintText: 'Search invoice # or client name...',
+                    onChanged: (v) => setState(() => _searchQuery = v),
+                    onClear: () => setState(() => _searchQuery = ''),
+                  ),
                 ],
               ),
+            ),
 
-              // Search field toggle
-              if (_isSearchOpen) ...[
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                  ),
-                  child: TextField(
-                    autofocus: true,
-                    onChanged: (v) => setState(() => _searchQuery = v),
-                    style: const TextStyle(color: Color(0xFF0F172A), fontSize: 14),
-                    decoration: const InputDecoration(
-                      hintText: 'Search invoice # or client name...',
-                      hintStyle: TextStyle(color: Color(0xFF94A3B8), fontSize: 13.5),
-                      border: InputBorder.none,
-                      prefixIcon: Icon(Icons.search, color: Color(0xFF64748B), size: 18),
-                    ),
-                  ),
-                ),
-              ],
+            const SizedBox(height: 14),
 
-              const SizedBox(height: 18),
-
-              // ── Invoice Health Card (From Mockup) ──
+            // ── Scrollable Body with Tibsy Pull-to-Refresh ──
+            Expanded(
+              child: TibsyPullToRefresh(
+                padding: const EdgeInsets.fromLTRB(20.0, 0, 20.0, 120.0),
+                onRefresh: () => syncAndRefreshEntireApp(ref),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ── Invoice Health Card (From Mockup) ──
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
@@ -436,14 +429,14 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
 
                     const SizedBox(height: 18),
 
-                    // "Give me advice" Lime CTA Button
+                    // "Give me advice" Orange CTA Button
                     SizedBox(
                       width: double.infinity,
                       height: 48,
                       child: ElevatedButton(
                         onPressed: () => _showAdviceBottomSheet(invoices, currencyFormat),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF9BD71B),
+                          backgroundColor: const Color(0xFFFF5722),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                           elevation: 0,
                         ),
@@ -452,7 +445,7 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
                           style: TextStyle(
                             fontSize: 14.5,
                             fontWeight: FontWeight.w900,
-                            color: Color(0xFF0F172A),
+                            color: Colors.white,
                           ),
                         ),
                       ),
@@ -597,28 +590,37 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
 
               // Invoices Cards List
               if (filteredInvoices.isEmpty)
-                Container(
-                  padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                  ),
-                  child: Center(
-                    child: Column(
-                      children: [
-                        const Icon(Icons.receipt_long_outlined, size: 40, color: Color(0xFF94A3B8)),
-                        const SizedBox(height: 10),
-                        const Text(
-                          'No invoices found in this view',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F172A)),
+                _searchQuery.trim().isNotEmpty
+                    ? SearchEmptyState(
+                        query: _searchQuery,
+                        itemType: 'invoices',
+                        onClear: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                      )
+                    : Container(
+                        padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
                         ),
-                        const SizedBox(height: 4),
-                        const Text('Tap + to create a new invoice instantly.', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-                      ],
-                    ),
-                  ),
-                )
+                        child: Center(
+                          child: Column(
+                            children: [
+                              const Icon(Icons.receipt_long_outlined, size: 40, color: Color(0xFF94A3B8)),
+                              const SizedBox(height: 10),
+                              const Text(
+                                'No invoices found in this view',
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F172A)),
+                              ),
+                              const SizedBox(height: 4),
+                              const Text('Tap + to create a new invoice instantly.', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                            ],
+                          ),
+                        ),
+                      )
               else
                 ListView.builder(
                   shrinkWrap: true,
@@ -626,11 +628,15 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
                   itemCount: filteredInvoices.length,
                   itemBuilder: (ctx, index) {
                     final inv = filteredInvoices[index];
-                    final isPaid = inv.status.toLowerCase() == 'paid';
+                    final String displayInvNumber = inv.invoiceNumber.startsWith('INV-')
+                        ? inv.invoiceNumber
+                        : (inv.invoiceNumber.startsWith('#')
+                            ? 'INV-${inv.invoiceNumber}'
+                            : 'INV-#${inv.invoiceNumber}');
 
                     return Container(
                       margin: const EdgeInsets.only(bottom: 10),
-                      padding: const EdgeInsets.all(14),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(20),
@@ -649,8 +655,8 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
                           children: [
                             // Left Icon Box
                             Container(
-                              width: 44,
-                              height: 44,
+                              width: 42,
+                              height: 42,
                               decoration: BoxDecoration(
                                 color: const Color(0xFFF8FAFC),
                                 borderRadius: BorderRadius.circular(14),
@@ -658,22 +664,35 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
                               ),
                               child: const Icon(Icons.receipt_long_rounded, color: Color(0xFF0F172A), size: 20),
                             ),
-                            const SizedBox(width: 12),
+                            const SizedBox(width: 10),
 
                             // Middle Info
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    'INV-#${inv.invoiceNumber}',
+                                  HighlightedText(
+                                    text: displayInvNumber,
+                                    query: _searchQuery,
                                     style: const TextStyle(
                                       fontWeight: FontWeight.w900,
-                                      fontSize: 14.5,
+                                      fontSize: 14,
                                       color: Color(0xFF0F172A),
                                       letterSpacing: -0.2,
                                     ),
                                   ),
+                                  if (inv.client.name.isNotEmpty) ...[
+                                    const SizedBox(height: 1),
+                                    HighlightedText(
+                                      text: inv.client.name,
+                                      query: _searchQuery,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF64748B),
+                                      ),
+                                    ),
+                                  ],
                                   const SizedBox(height: 3),
                                   Row(
                                     children: [
@@ -681,17 +700,21 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
                                         currencyFormat.format(inv.total),
                                         style: const TextStyle(
                                           fontWeight: FontWeight.w800,
-                                          fontSize: 12.5,
+                                          fontSize: 12,
                                           color: Color(0xFF0F172A),
                                         ),
                                       ),
-                                      const Text('  •  ', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
-                                      Text(
-                                        'Until ${DateFormat('dd MMM yyyy').format(inv.dueDate)}',
-                                        style: const TextStyle(
-                                          fontSize: 11.5,
-                                          color: Color(0xFF64748B),
-                                          fontWeight: FontWeight.w500,
+                                      const Text(' • ', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                                      Flexible(
+                                        child: Text(
+                                          'Until ${DateFormat('dd MMM yyyy').format(inv.dueDate)}',
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            color: Color(0xFF64748B),
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
                                     ],
@@ -700,24 +723,65 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
                               ),
                             ),
 
-                            // Right Status Badge Pill
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                              decoration: BoxDecoration(
-                                color: isPaid ? const Color(0xFFECFDF5) : const Color(0xFFFFF1ED),
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(
-                                  color: isPaid ? const Color(0xFF10B981).withValues(alpha: 0.3) : const Color(0xFFFF5722).withValues(alpha: 0.3),
+                            const SizedBox(width: 8),
+
+                            // Right Status Badge Pill (Interactive)
+                            StatusBadge(
+                              status: inv.status,
+                              dueDate: inv.dueDate,
+                              fontSize: 11.5,
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              onTap: () {
+                                final willBePaid = !inv.isPaid;
+                                ref.read(invoiceProvider.notifier).togglePaymentStatus(inv.id);
+                                if (willBePaid) {
+                                  CelebrationSparkle.show(
+                                    context,
+                                    message: '$displayInvNumber Paid! 🎉',
+                                  );
+                                } else {
+                                  HapticFeedback.mediumImpact();
+                                }
+                              },
+                            ),
+
+                            const SizedBox(width: 2),
+
+                            // More Options (Duplicate, View)
+                            PopupMenuButton<String>(
+                              icon: const Icon(Icons.more_vert_rounded, size: 18, color: Color(0xFF94A3B8)),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(minWidth: 140),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              onSelected: (action) {
+                                if (action == 'duplicate') {
+                                  _handleDuplicateInvoice(inv);
+                                } else if (action == 'preview') {
+                                  context.push('/preview', extra: inv);
+                                }
+                              },
+                              itemBuilder: (context) => [
+                                const PopupMenuItem(
+                                  value: 'duplicate',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.content_copy_rounded, size: 15, color: Color(0xFFFF5722)),
+                                      SizedBox(width: 8),
+                                      Text('Duplicate', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              child: Text(
-                                isPaid ? 'Paid' : 'Unpaid',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: isPaid ? const Color(0xFF10B981) : const Color(0xFFFF5722),
+                                const PopupMenuItem(
+                                  value: 'preview',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.visibility_rounded, size: 15, color: Color(0xFF64748B)),
+                                      SizedBox(width: 8),
+                                      Text('View', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+                                    ],
+                                  ),
                                 ),
-                              ),
+                              ],
                             ),
                           ],
                         ),
@@ -731,8 +795,11 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
           ),
         ),
       ),
-    );
-  }
+    ],
+  ),
+),
+);
+}
 
   Widget _buildHealthPill(Color color) {
     return Expanded(
@@ -749,7 +816,10 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
   Widget _buildFilterTab(String label, int count) {
     final isSelected = _selectedStatusFilter == label;
     return GestureDetector(
-      onTap: () => setState(() => _selectedStatusFilter = label),
+      onTap: () {
+        HapticFeedback.selectionClick();
+        setState(() => _selectedStatusFilter = label);
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
@@ -770,5 +840,60 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _handleDuplicateInvoice(Invoice invoice) async {
+    HapticFeedback.lightImpact();
+    final shouldDuplicate = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Row(
+          children: [
+            Icon(Icons.content_copy_rounded, color: Color(0xFFFF5722), size: 22),
+            SizedBox(width: 10),
+            Text('Duplicate Invoice', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+          ],
+        ),
+        content: Text(
+          'Create a duplicate copy of INV-#${invoice.invoiceNumber} for "${invoice.client.name}" with a fresh invoice number and today\'s date?',
+          style: const TextStyle(color: Color(0xFF64748B), fontSize: 14, height: 1.4),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF5722),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              elevation: 0,
+            ),
+            child: const Text('Duplicate', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldDuplicate == true && mounted) {
+      HapticFeedback.mediumImpact();
+      final duplicatedInvoice = await ref.read(invoiceProvider.notifier).duplicateAsNewInvoice(invoice);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Duplicated as INV-#${duplicatedInvoice.invoiceNumber}'),
+            backgroundColor: const Color(0xFF0F172A),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        context.push('/preview', extra: duplicatedInvoice);
+      }
+    }
   }
 }

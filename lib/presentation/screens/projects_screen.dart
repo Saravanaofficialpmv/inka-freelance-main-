@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../services/currency_tax_service.dart';
 import '../providers/profile_provider.dart';
 import '../viewmodels/project_viewmodel.dart';
+import '../widgets/tibsy_refresh_icon.dart';
+import '../widgets/app_search_bar.dart';
 
 class ProjectsScreen extends ConsumerStatefulWidget {
   const ProjectsScreen({super.key});
@@ -118,7 +121,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
                         ],
                       ),
                       child: const Text(
-                        '+ New Project',
+                        '+ Add Project',
                         style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                       ),
                     ),
@@ -130,43 +133,10 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
             // ── Search & Filter ──
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 6.0),
-              child: Container(
-                height: 48,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.03),
-                      blurRadius: 10,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 20),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: TextField(
-                        onChanged: (v) => setState(() => _searchQuery = v),
-                        style: const TextStyle(color: Color(0xFF0F172A), fontSize: 14),
-                        decoration: const InputDecoration(
-                          hintText: 'Search projects & clients...',
-                          hintStyle: TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          contentPadding: EdgeInsets.zero,
-                          isDense: true,
-                          filled: false,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+              child: AppSearchBar(
+                hintText: 'Search projects & clients...',
+                onChanged: (v) => setState(() => _searchQuery = v),
+                onClear: () => setState(() => _searchQuery = ''),
               ),
             ),
 
@@ -186,7 +156,10 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
                   return Padding(
                     padding: const EdgeInsets.only(right: 8.0),
                     child: GestureDetector(
-                      onTap: () => setState(() => _selectedStatusFilter = status),
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        setState(() => _selectedStatusFilter = status);
+                      },
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -217,107 +190,110 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
 
             // ── Projects List ──
             Expanded(
-              child: filteredProjects.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
-                          Icon(Icons.folder_open_rounded, size: 56, color: Color(0xFFCBD5E1)),
-                          SizedBox(height: 14),
-                          Text('No projects found', style: TextStyle(color: Color(0xFF64748B))),
-                        ],
-                      ),
-                    )
-                  : ListView.builder(
-                      physics: const BouncingScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
-                      itemCount: filteredProjects.length,
-                      itemBuilder: (context, index) {
-                        final project = filteredProjects[index];
-                        final statusColor = _getStatusColor(project.status);
-                        final progress = project.budget > 0 ? (project.receivedAmount / project.budget).clamp(0.0, 1.0) : 0.0;
-
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 14),
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(22),
-                            border: Border.all(color: const Color(0xFFE2E8F0)),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.03),
-                                blurRadius: 10,
-                                offset: const Offset(0, 2),
-                              ),
+              child: TibsyPullToRefresh(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+                onRefresh: () => syncAndRefreshEntireApp(ref),
+                child: filteredProjects.isEmpty
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 48),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: const [
+                              Icon(Icons.folder_open_rounded, size: 56, color: Color(0xFFCBD5E1)),
+                              SizedBox(height: 14),
+                              Text('No projects found', style: TextStyle(color: Color(0xFF64748B))),
                             ],
                           ),
-                          child: InkWell(
-                            onTap: () => context.push('/project-details', extra: project),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        project.projectName,
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F172A)),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: statusColor.withValues(alpha: 0.12),
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      child: Text(
-                                        project.status.toUpperCase(),
-                                        style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  project.clientName,
-                                  style: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
-                                ),
-                                const SizedBox(height: 14),
+                        ),
+                      )
+                    : Column(
+                        children: filteredProjects.map((project) {
+                          final statusColor = _getStatusColor(project.status);
+                          final progress = project.budget > 0 ? (project.receivedAmount / project.budget).clamp(0.0, 1.0) : 0.0;
 
-                                // Progress bar
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      '${(progress * 100).toInt()}% Invoiced',
-                                      style: const TextStyle(color: Color(0xFF64748B), fontSize: 12, fontWeight: FontWeight.w600),
-                                    ),
-                                    Text(
-                                      '${currencyFormat.format(project.receivedAmount)} / ${currencyFormat.format(project.budget)}',
-                                      style: const TextStyle(color: Color(0xFF0F172A), fontSize: 12, fontWeight: FontWeight.bold),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 6),
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(4),
-                                  child: LinearProgressIndicator(
-                                    value: progress,
-                                    backgroundColor: const Color(0xFFF1F5F9),
-                                    valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFFF5722)),
-                                    minHeight: 6,
-                                  ),
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 14),
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(22),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.03),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 2),
                                 ),
                               ],
                             ),
-                          ),
-                        );
-                      },
-                    ),
+                            child: InkWell(
+                              onTap: () => context.push('/project-details', extra: project),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          project.projectName,
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F172A)),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: statusColor.withValues(alpha: 0.12),
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                        child: Text(
+                                          project.status.toUpperCase(),
+                                          style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    project.clientName,
+                                    style: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                                  ),
+                                  const SizedBox(height: 14),
+
+                                  // Progress bar
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        '${(progress * 100).toInt()}% Invoiced',
+                                        style: const TextStyle(color: Color(0xFF64748B), fontSize: 12, fontWeight: FontWeight.w600),
+                                      ),
+                                      Text(
+                                        '${currencyFormat.format(project.receivedAmount)} / ${currencyFormat.format(project.budget)}',
+                                        style: const TextStyle(color: Color(0xFF0F172A), fontSize: 12, fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: LinearProgressIndicator(
+                                      value: progress,
+                                      backgroundColor: const Color(0xFFF1F5F9),
+                                      valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFFF5722)),
+                                      minHeight: 6,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+              ),
             ),
           ],
         ),

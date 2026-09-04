@@ -370,8 +370,8 @@ final timeStatsProvider = Provider<Map<String, dynamic>>((ref) {
   final startOfWeek = startOfToday.subtract(Duration(days: now.weekday - 1));
   final endOfWeek = startOfWeek.add(const Duration(days: 7));
 
-  final todayEntries = entries.where((e) => e.date.isAfter(startOfToday) && e.date.isBefore(endOfToday)).toList();
-  final weekEntries = entries.where((e) => e.date.isAfter(startOfWeek) && e.date.isBefore(endOfWeek)).toList();
+  final todayEntries = entries.where((e) => !e.date.isBefore(startOfToday) && e.date.isBefore(endOfToday)).toList();
+  final weekEntries = entries.where((e) => !e.date.isBefore(startOfWeek) && e.date.isBefore(endOfWeek)).toList();
   final unbilledEntries = entries.where((e) => !e.isBilled).toList();
   final billedEntries = entries.where((e) => e.isBilled).toList();
 

@@ -59,7 +59,6 @@ dependencies:
   flutter_local_notifications: ^21.0.0
   qr_flutter: ^4.1.0
   shared_preferences: ^2.2.2
-  supabase_flutter: ^2.12.2
   url_launcher: ^6.3.2
   image_picker: ^1.2.1
   speech_to_text: ^7.3.0
@@ -67,6 +66,7 @@ dependencies:
   google_sign_in: ^6.2.2
   sign_in_with_apple: ^8.1.0
   crypto: ^3.0.7
+  connectivity_plus: ^7.3.1
 
 dev_dependencies:
   flutter_test:
@@ -117,6 +117,10 @@ flutter:
     - assets/fonts/Poppins/
     - assets/images/
     - 1.jpg
+    - tibsy-dp-3.gif
+    - nav_icons/
+    - profilepage_icon/
+    - assets/templates/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

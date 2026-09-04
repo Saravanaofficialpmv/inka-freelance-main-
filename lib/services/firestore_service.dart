@@ -352,76 +352,76 @@ class FirestoreService {
         await saveBusinessProfile(localProfile, userId: userId);
       }
 
-      // 2. Sync Clients
+      // 2. Sync Clients (Bidirectional reconciliation)
       final remoteClients = await getClients(userId: userId);
-      if (remoteClients.isNotEmpty) {
-        for (var c in remoteClients) {
-          await clientsBox.put(c.id, c);
-        }
-      } else {
-        for (var c in clientsBox.values) {
+      final remoteClientIds = remoteClients.map((c) => c.id).toSet();
+      for (var c in clientsBox.values) {
+        if (!remoteClientIds.contains(c.id)) {
           await saveClient(c, userId: userId);
         }
       }
+      for (var c in remoteClients) {
+        await clientsBox.put(c.id, c);
+      }
 
-      // 3. Sync Invoices
+      // 3. Sync Invoices (Bidirectional reconciliation)
       final remoteInvoices = await getInvoices(userId: userId);
-      if (remoteInvoices.isNotEmpty) {
-        for (var inv in remoteInvoices) {
-          await invoicesBox.put(inv.id, inv);
-        }
-      } else {
-        for (var inv in invoicesBox.values) {
+      final remoteInvoiceIds = remoteInvoices.map((inv) => inv.id).toSet();
+      for (var inv in invoicesBox.values) {
+        if (!remoteInvoiceIds.contains(inv.id)) {
           await saveInvoice(inv, userId: userId);
         }
       }
+      for (var inv in remoteInvoices) {
+        await invoicesBox.put(inv.id, inv);
+      }
 
-      // 4. Sync Products
+      // 4. Sync Products (Bidirectional reconciliation)
       final remoteProducts = await getProducts(userId: userId);
-      if (remoteProducts.isNotEmpty) {
-        for (var p in remoteProducts) {
-          await productsBox.put(p.id, p);
-        }
-      } else {
-        for (var p in productsBox.values) {
+      final remoteProductIds = remoteProducts.map((p) => p.id).toSet();
+      for (var p in productsBox.values) {
+        if (!remoteProductIds.contains(p.id)) {
           await saveProduct(p, userId: userId);
         }
       }
+      for (var p in remoteProducts) {
+        await productsBox.put(p.id, p);
+      }
 
-      // 5. Sync Expenses
+      // 5. Sync Expenses (Bidirectional reconciliation)
       final remoteExpenses = await getExpenses(userId: userId);
-      if (remoteExpenses.isNotEmpty) {
-        for (var exp in remoteExpenses) {
-          await expensesBox.put(exp.id, exp);
-        }
-      } else {
-        for (var exp in expensesBox.values) {
+      final remoteExpenseIds = remoteExpenses.map((exp) => exp.id).toSet();
+      for (var exp in expensesBox.values) {
+        if (!remoteExpenseIds.contains(exp.id)) {
           await saveExpense(exp, userId: userId);
         }
       }
+      for (var exp in remoteExpenses) {
+        await expensesBox.put(exp.id, exp);
+      }
 
-      // 6. Sync Time Entries
+      // 6. Sync Time Entries (Bidirectional reconciliation)
       final remoteTimeEntries = await getTimeEntries(userId: userId);
-      if (remoteTimeEntries.isNotEmpty) {
-        for (var te in remoteTimeEntries) {
-          await timeEntriesBox.put(te.id, te);
-        }
-      } else {
-        for (var te in timeEntriesBox.values) {
+      final remoteTimeEntryIds = remoteTimeEntries.map((te) => te.id).toSet();
+      for (var te in timeEntriesBox.values) {
+        if (!remoteTimeEntryIds.contains(te.id)) {
           await saveTimeEntry(te, userId: userId);
         }
       }
+      for (var te in remoteTimeEntries) {
+        await timeEntriesBox.put(te.id, te);
+      }
 
-      // 7. Sync Projects
+      // 7. Sync Projects (Bidirectional reconciliation)
       final remoteProjects = await getProjects(userId: userId);
-      if (remoteProjects.isNotEmpty) {
-        for (var proj in remoteProjects) {
-          await projectsBox.put(proj.id, proj);
-        }
-      } else {
-        for (var proj in projectsBox.values) {
+      final remoteProjectIds = remoteProjects.map((proj) => proj.id).toSet();
+      for (var proj in projectsBox.values) {
+        if (!remoteProjectIds.contains(proj.id)) {
           await saveProject(proj, userId: userId);
         }
+      }
+      for (var proj in remoteProjects) {
+        await projectsBox.put(proj.id, proj);
       }
 
       debugPrint('Firestore data sync completed for user: $userId');

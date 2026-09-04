@@ -77,5 +77,23 @@
 			</array>
 		</dict>
 	</array>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Inka requires microphone access for voice dictation of invoice items.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Inka uses speech recognition to convert spoken item descriptions into invoice lines.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Inka needs access to your photo library to choose a business logo or signature.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Inka needs camera access to photograph business logos or receipts.</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>whatsapp</string>
+		<string>tel</string>
+		<string>mailto</string>
+		<string>upi</string>
+		<string>phonepe</string>
+		<string>paytmmp</string>
+		<string>gpay</string>
+	</array>
 </dict>
 </plist>

@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../data/models/client.dart';
@@ -8,6 +9,13 @@ import '../providers/client_provider.dart';
 import '../providers/profile_provider.dart';
 import '../viewmodels/invoice_viewmodel.dart';
 import '../../services/currency_tax_service.dart';
+import '../widgets/tibsy_refresh_icon.dart';
+import '../widgets/app_search_bar.dart';
+import '../widgets/highlighted_text.dart';
+import '../widgets/bouncing_button.dart';
+import '../widgets/search_empty_state.dart';
+import '../../services/contact_service.dart';
+import '../../core/utils/validators.dart';
 
 class ClientsScreen extends ConsumerStatefulWidget {
   final bool isSelectionMode;
@@ -20,18 +28,13 @@ class ClientsScreen extends ConsumerStatefulWidget {
 
 class _ClientsScreenState extends ConsumerState<ClientsScreen> {
   String _selectedFilter = 'Active';
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
 
-  void _openSearchOverlay(List<Client> clients, List<Invoice> invoices, dynamic currencyFormat) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => _SearchOverlaySheet(
-        clients: clients,
-        invoices: invoices,
-        currencyFormat: currencyFormat,
-      ),
-    );
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   void _showAddEditClientDialog({Client? client}) {
@@ -39,6 +42,7 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
     final emailController = TextEditingController(text: client?.email ?? '');
     final phoneController = TextEditingController(text: client?.phone ?? '');
     final addressController = TextEditingController(text: client?.address ?? '');
+    final gstController = TextEditingController(text: client?.gstNumber ?? '');
 
     showModalBottomSheet(
       context: context,
@@ -80,6 +84,8 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
               _buildModalInput('Phone Number', '+1 234 567 8900', phoneController, Icons.phone_outlined, keyboardType: TextInputType.phone),
               const SizedBox(height: 12),
               _buildModalInput('Billing Address', '224, Park Avenue, East Side New York', addressController, Icons.location_on_outlined, maxLines: 2),
+              const SizedBox(height: 12),
+              _buildModalInput('GST / Tax ID (Optional)', 'e.g. 29ABCDE1234F1Z5', gstController, Icons.badge_outlined),
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
@@ -87,13 +93,29 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                 child: ElevatedButton(
                   onPressed: () {
                     final name = nameController.text.trim();
-                    if (name.isEmpty) return;
+                    if (name.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Client name is required')));
+                      return;
+                    }
+                    final email = emailController.text.trim();
+                    final emailErr = AppValidators.validateOptionalEmail(email);
+                    if (emailErr != null) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(emailErr)));
+                      return;
+                    }
+                    final phone = phoneController.text.trim();
+                    final phoneErr = AppValidators.validateOptionalPhone(phone);
+                    if (phoneErr != null) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(phoneErr)));
+                      return;
+                    }
                     final newClient = Client(
                       id: client?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
                       name: name,
-                      email: emailController.text.trim(),
-                      phone: phoneController.text.trim(),
+                      email: email,
+                      phone: phone,
                       address: addressController.text.trim(),
+                      gstNumber: gstController.text.trim().isNotEmpty ? gstController.text.trim() : client?.gstNumber,
                     );
                     if (client == null) {
                       ref.read(clientProvider.notifier).addClient(newClient);
@@ -103,13 +125,13 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                     Navigator.pop(ctx);
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF9BD71B),
+                    backgroundColor: const Color(0xFFFF5722),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     elevation: 0,
                   ),
                   child: Text(
                     client == null ? 'Add Client' : 'Save Changes',
-                    style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.w900, fontSize: 15),
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 15),
                   ),
                 ),
               ),
@@ -140,7 +162,7 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
             enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFF9BD71B), width: 1.5)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFFF5722), width: 1.5)),
           ),
         ),
       ],
@@ -171,6 +193,16 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
 
     // Filtered clients list
     final filteredClients = clients.where((c) {
+      if (_searchQuery.isNotEmpty) {
+        final q = _searchQuery.toLowerCase();
+        final matchesName = c.name.toLowerCase().contains(q);
+        final matchesEmail = c.email.toLowerCase().contains(q);
+        final matchesPhone = c.phone.toLowerCase().contains(q);
+        final matchesAddress = c.address.toLowerCase().contains(q);
+        if (!matchesName && !matchesEmail && !matchesPhone && !matchesAddress) {
+          return false;
+        }
+      }
       if (_selectedFilter == 'Overdue') {
         return invoices.any((i) => i.client.id == c.id && i.status.toLowerCase() == 'overdue');
       } else if (_selectedFilter == 'High-Value') {
@@ -183,95 +215,99 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FA),
       body: SafeArea(
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── Top Header Bar ──
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        bottom: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Fixed Top Header Bar & Search Bar ──
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20.0, 12.0, 20.0, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // ── Top Header Bar ──
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      if (widget.isSelectionMode) ...[
-                        GestureDetector(
-                          onTap: () => context.pop(),
-                          child: Container(
-                            width: 40,
-                            height: 40,
-                            margin: const EdgeInsets.only(right: 12),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: const Color(0xFFE2E8F0)),
-                            ),
-                            child: const Icon(Icons.arrow_back_ios_new_rounded, size: 16, color: Color(0xFF0F172A)),
-                          ),
-                        ),
-                      ],
-                      const Text(
-                        'My Clients',
-                        style: TextStyle(
-                          fontSize: 26,
-                          fontWeight: FontWeight.w900,
-                          color: Color(0xFF0F172A),
-                          letterSpacing: -0.6,
-                        ),
-                      ),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      GestureDetector(
-                        onTap: () => _openSearchOverlay(clients, invoices, currencyFormat),
-                        child: Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.03),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
+                      Row(
+                        children: [
+                          if (widget.isSelectionMode) ...[
+                            GestureDetector(
+                              onTap: () => context.pop(),
+                              child: Container(
+                                width: 40,
+                                height: 40,
+                                margin: const EdgeInsets.only(right: 12),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                                ),
+                                child: const Icon(Icons.arrow_back_ios_new_rounded, size: 16, color: Color(0xFF0F172A)),
                               ),
-                            ],
+                            ),
+                          ],
+                          const Text(
+                            'My Clients',
+                            style: TextStyle(
+                              fontSize: 26,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF0F172A),
+                              letterSpacing: -0.6,
+                            ),
                           ),
-                          child: const Icon(Icons.search_rounded, size: 20, color: Color(0xFF0F172A)),
-                        ),
+                        ],
                       ),
-                      const SizedBox(width: 10),
-                      GestureDetector(
+                      BouncingButton(
                         onTap: () => _showAddEditClientDialog(),
                         child: Container(
                           width: 44,
                           height: 44,
                           decoration: BoxDecoration(
-                            color: const Color(0xFF9BD71B),
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFFFF5722), Color(0xFFFF7A50)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF9BD71B).withValues(alpha: 0.35),
+                                color: const Color(0xFFFF5722).withValues(alpha: 0.35),
                                 blurRadius: 10,
                                 offset: const Offset(0, 3),
                               ),
                             ],
                           ),
-                          child: const Icon(Icons.person_add_alt_1_rounded, size: 20, color: Color(0xFF0F172A)),
+                          child: const Icon(Icons.person_add_alt_1_rounded, size: 20, color: Colors.white),
                         ),
                       ),
                     ],
                   ),
+
+                  const SizedBox(height: 14),
+
+                  // ── Search Bar ──
+                  AppSearchBar(
+                    controller: _searchController,
+                    hintText: 'Search clients, company, email...',
+                    onChanged: (v) => setState(() => _searchQuery = v),
+                    onClear: () => setState(() => _searchQuery = ''),
+                  ),
                 ],
               ),
+            ),
 
-              const SizedBox(height: 18),
+            const SizedBox(height: 14),
 
-              // ── Top Financial Metric Row (Paid, Unpaid, Pending) ──
+            // ── Scrollable Body with Tibsy Pull-to-Refresh ──
+            Expanded(
+              child: TibsyPullToRefresh(
+                padding: const EdgeInsets.fromLTRB(20.0, 0, 20.0, 120.0),
+                onRefresh: () => syncAndRefreshEntireApp(ref),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ── Top Financial Metric Row (Paid, Unpaid, Pending) ──
               Row(
                 children: [
                   _buildMetricItem('Paid', paidTotal > 0 ? paidTotal : 13100.0, currencyFormat),
@@ -390,17 +426,26 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
 
               // ── Client Cards Grid / List (From Mockup) ──
               if (filteredClients.isEmpty)
-                Container(
-                  padding: const EdgeInsets.all(32),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                  ),
-                  child: const Center(
-                    child: Text('No clients found in this category. Tap + to add one.', style: TextStyle(color: Color(0xFF94A3B8))),
-                  ),
-                )
+                _searchQuery.trim().isNotEmpty
+                    ? SearchEmptyState(
+                        query: _searchQuery,
+                        itemType: 'clients',
+                        onClear: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                      )
+                    : Container(
+                        padding: const EdgeInsets.all(32),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: const Center(
+                          child: Text('No clients found in this category. Tap + to add one.', style: TextStyle(color: Color(0xFF94A3B8))),
+                        ),
+                      )
               else
                 GridView.builder(
                   shrinkWrap: true,
@@ -409,13 +454,14 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                     crossAxisCount: 2,
                     crossAxisSpacing: 12,
                     mainAxisSpacing: 12,
-                    childAspectRatio: 1.12,
+                    childAspectRatio: 1.05,
                   ),
                   itemCount: filteredClients.length,
                   itemBuilder: (ctx, index) {
                     final client = filteredClients[index];
                     final clientInvoices = invoices.where((i) => i.client.id == client.id).toList();
-                    final hasUnpaid = clientInvoices.any((i) => i.status.toLowerCase() != 'paid');
+                    final unpaidInvoices = clientInvoices.where((i) => i.status.toLowerCase() != 'paid').toList();
+                    final unpaidBalance = unpaidInvoices.fold<double>(0, (sum, i) => sum + i.total);
 
                     return GestureDetector(
                       onTap: () {
@@ -426,7 +472,7 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                         }
                       },
                       child: Container(
-                        padding: const EdgeInsets.all(14),
+                        padding: const EdgeInsets.all(13),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(22),
@@ -446,42 +492,77 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 CircleAvatar(
-                                  radius: 19,
+                                  radius: 18,
                                   backgroundColor: const Color(0xFF0F172A),
                                   child: Text(
                                     client.name.isNotEmpty ? client.name[0].toUpperCase() : 'C',
                                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                                   ),
                                 ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: hasUnpaid ? const Color(0xFFFFF1ED) : const Color(0xFFF1F5F9),
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                                  ),
-                                  child: Text(
-                                    hasUnpaid ? 'Unpaid' : 'New',
-                                    style: TextStyle(
-                                      fontSize: 10.5,
-                                      fontWeight: FontWeight.w700,
-                                      color: hasUnpaid ? const Color(0xFFFF5722) : const Color(0xFF64748B),
-                                    ),
-                                  ),
-                                ),
+                                _buildClientBalanceBadge(clientInvoices, unpaidBalance, currencyFormat),
                               ],
                             ),
                             const Spacer(),
-                            Text(
-                              client.name,
-                              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Color(0xFF0F172A)),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              '${clientInvoices.length} Invoices',
-                              style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      HighlightedText(
+                                        text: client.name,
+                                        query: _searchQuery,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 13.5,
+                                          color: Color(0xFF0F172A),
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '${clientInvoices.length} Invoices',
+                                        style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    GestureDetector(
+                                      onTap: () => ContactService.makeCall(context, client.phone),
+                                      child: Container(
+                                        width: 28,
+                                        height: 28,
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFFFECE8),
+                                          shape: BoxShape.circle,
+                                          border: Border.all(color: const Color(0xFFFF5722).withValues(alpha: 0.2)),
+                                        ),
+                                        child: const Icon(Icons.phone_rounded, size: 13.5, color: Color(0xFFFF5722)),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    GestureDetector(
+                                      onTap: () => ContactService.openWhatsApp(context, client.phone),
+                                      child: Container(
+                                        width: 28,
+                                        height: 28,
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFECFDF5),
+                                          shape: BoxShape.circle,
+                                          border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.2)),
+                                        ),
+                                        child: const Icon(Icons.chat_rounded, size: 13.5, color: Color(0xFF10B981)),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -495,8 +576,11 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
           ),
         ),
       ),
-    );
-  }
+    ],
+  ),
+),
+);
+}
 
   Widget _buildMetricItem(String title, double amount, dynamic currencyFormat) {
     return Expanded(
@@ -551,7 +635,10 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
   Widget _buildFilterChip(String label) {
     final isSelected = _selectedFilter == label;
     return GestureDetector(
-      onTap: () => setState(() => _selectedFilter = label),
+      onTap: () {
+        HapticFeedback.selectionClick();
+        setState(() => _selectedFilter = label);
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
@@ -570,6 +657,86 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
             color: isSelected ? Colors.white : const Color(0xFF64748B),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildClientBalanceBadge(List<Invoice> clientInvoices, double unpaidBalance, dynamic currencyFormat) {
+    if (clientInvoices.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7.5, vertical: 3),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: const Text(
+          'New',
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF64748B),
+          ),
+        ),
+      );
+    }
+
+    if (unpaidBalance > 0) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7.5, vertical: 3),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF1ED),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFFF5722).withValues(alpha: 0.3)),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFFF5722).withValues(alpha: 0.08),
+              blurRadius: 6,
+              offset: const Offset(0, 1),
+            ),
+          ],
+        ),
+        child: Text(
+          '${currencyFormat.format(unpaidBalance)} Due',
+          style: const TextStyle(
+            fontSize: 9.5,
+            fontWeight: FontWeight.w800,
+            color: Color(0xFFFF5722),
+            letterSpacing: -0.2,
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7.5, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFFECFDF5),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF10B981).withValues(alpha: 0.08),
+            blurRadius: 6,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.check_circle_rounded, size: 10, color: Color(0xFF10B981)),
+          SizedBox(width: 3),
+          Text(
+            'All Clear',
+            style: TextStyle(
+              fontSize: 9.5,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF10B981),
+              letterSpacing: -0.2,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -618,209 +785,4 @@ class _ClientDonutChartPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// GLOBAL SEARCH OVERLAY BOTTOM SHEET (From Mockup Image 2 Middle)
-// ─────────────────────────────────────────────────────────────────────────────
-class _SearchOverlaySheet extends StatefulWidget {
-  final List<Client> clients;
-  final List<Invoice> invoices;
-  final dynamic currencyFormat;
 
-  const _SearchOverlaySheet({
-    required this.clients,
-    required this.invoices,
-    required this.currencyFormat,
-  });
-
-  @override
-  State<_SearchOverlaySheet> createState() => _SearchOverlaySheetState();
-}
-
-class _SearchOverlaySheetState extends State<_SearchOverlaySheet> {
-  String _query = '';
-  String _activeTab = 'People';
-
-  @override
-  Widget build(BuildContext context) {
-    final filteredClients = widget.clients.where((c) {
-      return _query.isEmpty || c.name.toLowerCase().contains(_query.toLowerCase());
-    }).toList();
-
-    final filteredInvoices = widget.invoices.where((i) {
-      return _query.isEmpty ||
-          i.invoiceNumber.toLowerCase().contains(_query.toLowerCase()) ||
-          i.client.name.toLowerCase().contains(_query.toLowerCase());
-    }).toList();
-
-    return Container(
-      constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-      ),
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-        left: 20,
-        right: 20,
-        top: 16,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Drag Handle
-          Center(
-            child: Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(color: const Color(0xFFE2E8F0), borderRadius: BorderRadius.circular(2)),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Search Field
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-            ),
-            child: TextField(
-              autofocus: true,
-              onChanged: (v) => setState(() => _query = v),
-              style: const TextStyle(color: Color(0xFF0F172A), fontSize: 14.5),
-              decoration: const InputDecoration(
-                hintText: 'What do you want to search?',
-                hintStyle: TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
-                prefixIcon: Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 20),
-                border: InputBorder.none,
-              ),
-            ),
-          ),
-          const SizedBox(height: 14),
-
-          // Filter category pills: People, Invoices, Settings
-          Row(
-            children: [
-              _buildCategoryTab('People'),
-              const SizedBox(width: 8),
-              _buildCategoryTab('Invoices'),
-              const SizedBox(width: 8),
-              _buildCategoryTab('Settings'),
-            ],
-          ),
-          const SizedBox(height: 18),
-
-          Expanded(
-            child: ListView(
-              physics: const BouncingScrollPhysics(),
-              children: [
-                if (_activeTab == 'People' || _activeTab == 'Settings') ...[
-                  const Text('Latest people', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF64748B))),
-                  const SizedBox(height: 8),
-                  for (final client in filteredClients.take(4))
-                    ListTile(
-                      onTap: () {
-                        Navigator.pop(context);
-                        context.push('/client-details', extra: client);
-                      },
-                      contentPadding: const EdgeInsets.symmetric(vertical: 2),
-                      leading: CircleAvatar(
-                        backgroundColor: const Color(0xFF0F172A),
-                        child: Text(client.name.isNotEmpty ? client.name[0].toUpperCase() : 'C', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                      ),
-                      title: Text(client.name, style: const TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
-                      subtitle: Text('${widget.invoices.where((i) => i.client.id == client.id).length} Invoices', style: const TextStyle(color: Color(0xFF64748B), fontSize: 12)),
-                    ),
-                  const SizedBox(height: 14),
-                ],
-
-                if (_activeTab == 'Invoices' || _activeTab == 'People') ...[
-                  const Text('Invoices', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF64748B))),
-                  const SizedBox(height: 8),
-                  for (final inv in filteredInvoices.take(4))
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: InkWell(
-                        onTap: () {
-                          Navigator.pop(context);
-                          context.push('/preview', extra: inv);
-                        },
-                        child: Row(
-                          children: [
-                            const Icon(Icons.receipt_long_rounded, color: Color(0xFF0F172A), size: 20),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('INV-#${inv.invoiceNumber}', style: const TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
-                                  Text(inv.client.name, style: const TextStyle(color: Color(0xFF64748B), fontSize: 12)),
-                                ],
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: const Color(0xFFE2E8F0)),
-                              ),
-                              child: Text(
-                                inv.status.toLowerCase() == 'paid' ? 'Paid' : 'Unpaid',
-                                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                ],
-              ],
-            ),
-          ),
-
-          Center(
-            child: TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Tap outside area to close', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCategoryTab(String tab) {
-    final isSelected = _activeTab == tab;
-    return GestureDetector(
-      onTap: () => setState(() => _activeTab = tab),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: isSelected ? const Color(0xFF0F172A) : const Color(0xFFE2E8F0),
-          ),
-        ),
-        child: Text(
-          tab,
-          style: TextStyle(
-            fontSize: 12.5,
-            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-            color: isSelected ? Colors.white : const Color(0xFF64748B),
-          ),
-        ),
-      ),
-    );
-  }
-}

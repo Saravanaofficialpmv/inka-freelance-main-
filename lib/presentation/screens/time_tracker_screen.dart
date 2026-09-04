@@ -11,6 +11,8 @@ import '../providers/client_provider.dart';
 import '../providers/profile_provider.dart';
 import '../viewmodels/project_viewmodel.dart';
 import '../viewmodels/time_tracker_viewmodel.dart';
+import '../widgets/tibsy_refresh_icon.dart';
+import '../widgets/bouncing_button.dart';
 
 class TimeTrackerScreen extends ConsumerStatefulWidget {
   const TimeTrackerScreen({super.key});
@@ -137,6 +139,7 @@ class _TimeTrackerScreenState extends ConsumerState<TimeTrackerScreen> with Sing
             icon: const Icon(Icons.playlist_add_rounded, color: AppColors.primary, size: 26),
             onPressed: () => _showManualEntryDialog(),
           ),
+          const SizedBox(width: 8),
         ],
       ),
       body: Column(
@@ -244,53 +247,75 @@ class _TimeTrackerScreenState extends ConsumerState<TimeTrackerScreen> with Sing
                     children: [
                       if (!activeTimer.isRunning)
                         Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: _showStartTimerDialog,
-                            icon: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 22),
-                            label: const Text(
-                              'Start New Timer',
-                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primary,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                              fixedSize: const Size.fromHeight(50),
-                              elevation: 0,
+                          child: BouncingButton(
+                            onTap: _showStartTimerDialog,
+                            child: Container(
+                              height: 50,
+                              decoration: BoxDecoration(
+                                color: AppColors.primary,
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.primary.withValues(alpha: 0.35),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: const [
+                                  Icon(Icons.play_arrow_rounded, color: Colors.white, size: 22),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Start New Timer',
+                                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         )
                       else ...[
                         // Pause / Resume
                         Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () {
+                          child: BouncingButton(
+                            onTap: () {
                               if (activeTimer.isPaused) {
                                 ref.read(activeTimerProvider.notifier).resumeTimer();
                               } else {
                                 ref.read(activeTimerProvider.notifier).pauseTimer();
                               }
                             },
-                            icon: Icon(
-                              activeTimer.isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded,
-                              color: Colors.white,
-                              size: 20,
-                            ),
-                            label: Text(
-                              activeTimer.isPaused ? 'Resume' : 'Pause',
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              side: BorderSide(color: Colors.white.withValues(alpha: 0.25)),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                              fixedSize: const Size.fromHeight(48),
+                            child: Container(
+                              height: 48,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(18),
+                                border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    activeTimer.isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded,
+                                    color: Colors.white,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    activeTimer.isPaused ? 'Resume' : 'Pause',
+                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
                         const SizedBox(width: 10),
                         // Stop & Save
                         Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: () async {
+                          child: BouncingButton(
+                            onTap: () async {
                               final saved = await ref.read(activeTimerProvider.notifier).stopAndSave(ref);
                               if (!context.mounted) return;
                               if (saved != null) {
@@ -304,16 +329,30 @@ class _TimeTrackerScreenState extends ConsumerState<TimeTrackerScreen> with Sing
                                 );
                               }
                             },
-                            icon: const Icon(Icons.stop_rounded, color: Colors.white, size: 20),
-                            label: const Text(
-                              'Stop & Log',
-                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primary,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                              fixedSize: const Size.fromHeight(48),
-                              elevation: 0,
+                            child: Container(
+                              height: 48,
+                              decoration: BoxDecoration(
+                                color: AppColors.primary,
+                                borderRadius: BorderRadius.circular(18),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.primary.withValues(alpha: 0.35),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: const [
+                                  Icon(Icons.stop_rounded, color: Colors.white, size: 20),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    'Stop & Log',
+                                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -500,148 +539,152 @@ class _TimeTrackerScreenState extends ConsumerState<TimeTrackerScreen> with Sing
     double totalHours,
     double totalValue,
   ) {
-    if (entries.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.timer_outlined, size: 48, color: const Color(0xFF94A3B8).withValues(alpha: 0.4)),
-            const SizedBox(height: 12),
-            const Text(
-              'No unbilled time entries',
-              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: Color(0xFF0F172A)),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              'Track hours with the stopwatch above or log manual sessions.',
-              style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return ListView(
+    return TibsyPullToRefresh(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      physics: const BouncingScrollPhysics(),
-      children: [
-        // Summary Card
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: const Color(0xFFFFF1ED),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFFF5722).withValues(alpha: 0.2)),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.hourglass_top_rounded, color: Color(0xFFFF5722), size: 18),
-                  const SizedBox(width: 8),
-                  Text(
-                    '${totalHours.toStringAsFixed(1)} unbilled hrs',
-                    style: const TextStyle(fontWeight: FontWeight.w800, color: Color(0xFFBF360C), fontSize: 13),
+      onRefresh: () => syncAndRefreshEntireApp(ref),
+      child: entries.isEmpty
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 48),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.timer_outlined, size: 48, color: const Color(0xFF94A3B8).withValues(alpha: 0.4)),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'No unbilled time entries',
+                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: Color(0xFF0F172A)),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Track hours with the stopwatch above or log manual sessions.',
+                      style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : Column(
+              children: [
+                // Summary Card
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF1ED),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFFF5722).withValues(alpha: 0.2)),
                   ),
-                ],
-              ),
-              Text(
-                'Total: ${currencyFormat.format(totalValue)}',
-                style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFFFF5722), fontSize: 14),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.hourglass_top_rounded, color: Color(0xFFFF5722), size: 18),
+                          const SizedBox(width: 8),
+                          Text(
+                            '${totalHours.toStringAsFixed(1)} unbilled hrs',
+                            style: const TextStyle(fontWeight: FontWeight.w800, color: Color(0xFFBF360C), fontSize: 13),
+                          ),
+                        ],
+                      ),
+                      Text(
+                        'Total: ${currencyFormat.format(totalValue)}',
+                        style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFFFF5722), fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
 
-        // Select All row
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Select items to invoice (${_selectedEntryIds.length}/${entries.length})',
-              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
-            ),
-            TextButton(
-              onPressed: () {
-                setState(() {
-                  if (_selectedEntryIds.length == entries.length) {
-                    _selectedEntryIds.clear();
-                  } else {
-                    _selectedEntryIds.addAll(entries.map((e) => e.id));
-                  }
-                });
-              },
-              child: Text(
-                _selectedEntryIds.length == entries.length ? 'Deselect All' : 'Select All',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFFF5722)),
-              ),
-            ),
-          ],
-        ),
+                // Select All row
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Select items to invoice (${_selectedEntryIds.length}/${entries.length})',
+                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        setState(() {
+                          if (_selectedEntryIds.length == entries.length) {
+                            _selectedEntryIds.clear();
+                          } else {
+                            _selectedEntryIds.addAll(entries.map((e) => e.id));
+                          }
+                        });
+                      },
+                      child: Text(
+                        _selectedEntryIds.length == entries.length ? 'Deselect All' : 'Select All',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFFF5722)),
+                      ),
+                    ),
+                  ],
+                ),
 
-        ...entries.map((entry) {
-          final isSelected = _selectedEntryIds.contains(entry.id);
-          return _TimeEntryCard(
-            entry: entry,
-            currencyFormat: currencyFormat,
-            isSelected: isSelected,
-            onToggleSelect: () {
-              setState(() {
-                if (isSelected) {
-                  _selectedEntryIds.remove(entry.id);
-                } else {
-                  _selectedEntryIds.add(entry.id);
-                }
-              });
-            },
-            onEdit: () => _showManualEntryDialog(entryToEdit: entry),
-            onDelete: () => ref.read(timeEntriesProvider.notifier).deleteEntry(entry.id),
-          );
-        }),
-        const SizedBox(height: 80),
-      ],
+                ...entries.map((entry) {
+                  final isSelected = _selectedEntryIds.contains(entry.id);
+                  return _TimeEntryCard(
+                    entry: entry,
+                    currencyFormat: currencyFormat,
+                    isSelected: isSelected,
+                    onToggleSelect: () {
+                      setState(() {
+                        if (isSelected) {
+                          _selectedEntryIds.remove(entry.id);
+                        } else {
+                          _selectedEntryIds.add(entry.id);
+                        }
+                      });
+                    },
+                    onEdit: () => _showManualEntryDialog(entryToEdit: entry),
+                    onDelete: () => ref.read(timeEntriesProvider.notifier).deleteEntry(entry.id),
+                  );
+                }),
+                const SizedBox(height: 80),
+              ],
+            ),
     );
   }
 
   Widget _buildBilledTab(List<TimeEntry> entries, NumberFormat currencyFormat) {
-    if (entries.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.check_circle_outline_rounded, size: 48, color: const Color(0xFF94A3B8).withValues(alpha: 0.4)),
-            const SizedBox(height: 12),
-            const Text(
-              'No invoiced history yet',
-              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: Color(0xFF0F172A)),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              'When you convert tracked hours into invoices, they appear here.',
-              style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return ListView.builder(
+    return TibsyPullToRefresh(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      physics: const BouncingScrollPhysics(),
-      itemCount: entries.length,
-      itemBuilder: (ctx, index) {
-        final entry = entries[index];
-        return _TimeEntryCard(
-          entry: entry,
-          currencyFormat: currencyFormat,
-          isSelected: false,
-          isBilledView: true,
-          onEdit: null,
-          onDelete: () => ref.read(timeEntriesProvider.notifier).deleteEntry(entry.id),
-        );
-      },
+      onRefresh: () => syncAndRefreshEntireApp(ref),
+      child: entries.isEmpty
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 48),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.check_circle_outline_rounded, size: 48, color: const Color(0xFF94A3B8).withValues(alpha: 0.4)),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'No invoiced history yet',
+                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: Color(0xFF0F172A)),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'When you convert tracked hours into invoices, they appear here.',
+                      style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : Column(
+              children: entries.map((entry) {
+                return _TimeEntryCard(
+                  entry: entry,
+                  currencyFormat: currencyFormat,
+                  isSelected: false,
+                  isBilledView: true,
+                  onEdit: null,
+                  onDelete: () => ref.read(timeEntriesProvider.notifier).deleteEntry(entry.id),
+                );
+              }).toList(),
+            ),
     );
   }
 }
@@ -855,6 +898,7 @@ class _StartTimerBottomSheetState extends ConsumerState<_StartTimerBottomSheet> 
   Widget build(BuildContext context) {
     final clients = ref.watch(clientsProvider);
     final projects = ref.watch(projectProvider);
+    final currencySymbol = CurrencyTaxService.getCurrencySymbol(ref.watch(profileProvider).currency);
 
     return Container(
       decoration: const BoxDecoration(
@@ -959,7 +1003,7 @@ class _StartTimerBottomSheetState extends ConsumerState<_StartTimerBottomSheet> 
             const SizedBox(height: 14),
 
             // Hourly Rate
-            const Text('Hourly Rate (\$)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+            Text('Hourly Rate ($currencySymbol)', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
             const SizedBox(height: 6),
             TextField(
               controller: _rateController,
@@ -1081,6 +1125,7 @@ class _ManualTimeEntryBottomSheetState extends ConsumerState<_ManualTimeEntryBot
     final clients = ref.watch(clientsProvider);
     final projects = ref.watch(projectProvider);
     final isEdit = widget.entryToEdit != null;
+    final currencySymbol = CurrencyTaxService.getCurrencySymbol(ref.watch(profileProvider).currency);
 
     return Container(
       decoration: const BoxDecoration(
@@ -1198,7 +1243,7 @@ class _ManualTimeEntryBottomSheetState extends ConsumerState<_ManualTimeEntryBot
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Hourly Rate (\$)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                      Text('Hourly Rate ($currencySymbol)', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
                       const SizedBox(height: 6),
                       TextField(
                         controller: _rateController,

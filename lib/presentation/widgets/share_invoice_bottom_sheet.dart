@@ -1,32 +1,40 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import '../../data/models/business_profile.dart';
 import '../../data/models/invoice.dart';
 import '../../services/pdf_service.dart';
 import '../../services/whatsapp_service.dart';
+import '../../services/currency_tax_service.dart';
+import 'bouncing_button.dart';
 
 class ShareInvoiceBottomSheet extends StatefulWidget {
   final Invoice invoice;
   final BusinessProfile profile;
+  final String? templateId;
 
   const ShareInvoiceBottomSheet({
     super.key,
     required this.invoice,
     required this.profile,
+    this.templateId,
   });
 
   static Future<void> show(
     BuildContext context, {
     required Invoice invoice,
     required BusinessProfile profile,
+    String? templateId,
   }) {
     return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useRootNavigator: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => ShareInvoiceBottomSheet(
         invoice: invoice,
         profile: profile,
+        templateId: templateId,
       ),
     );
   }
@@ -67,6 +75,7 @@ class _ShareInvoiceBottomSheetState extends State<ShareInvoiceBottomSheet> {
   }
 
   void _onTemplateChanged(WhatsAppTemplateType type) {
+    HapticFeedback.selectionClick();
     setState(() {
       _selectedTemplate = type;
       _messageController.text = WhatsAppService.buildMessage(
@@ -75,6 +84,44 @@ class _ShareInvoiceBottomSheetState extends State<ShareInvoiceBottomSheet> {
         templateType: _selectedTemplate,
       );
     });
+  }
+
+  void _handleResetTemplate() {
+    HapticFeedback.lightImpact();
+    setState(() {
+      _messageController.text = WhatsAppService.buildMessage(
+        invoice: widget.invoice,
+        profile: widget.profile,
+        templateType: _selectedTemplate,
+      );
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Template reset to default'),
+        backgroundColor: Color(0xFF0F172A),
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 1),
+      ),
+    );
+  }
+
+  void _insertTag(String tagValue) {
+    HapticFeedback.lightImpact();
+    final text = _messageController.text;
+    final selection = _messageController.selection;
+    if (selection.isValid && selection.start >= 0 && selection.end <= text.length) {
+      final newText = text.replaceRange(selection.start, selection.end, tagValue);
+      _messageController.value = TextEditingValue(
+        text: newText,
+        selection: TextSelection.collapsed(offset: selection.start + tagValue.length),
+      );
+    } else {
+      final newText = '$text $tagValue';
+      _messageController.value = TextEditingValue(
+        text: newText,
+        selection: TextSelection.collapsed(offset: newText.length),
+      );
+    }
   }
 
   Future<void> _handleSendWhatsApp() async {
@@ -133,19 +180,25 @@ class _ShareInvoiceBottomSheetState extends State<ShareInvoiceBottomSheet> {
   @override
   Widget build(BuildContext context) {
     final clientPhone = widget.invoice.client.phone;
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.9,
+      ),
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
       ),
       padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+        bottom: bottomInset + (bottomInset > 0 ? 16 : bottomPadding + 16),
         left: 20,
         right: 20,
-        top: 16,
+        top: 14,
       ),
       child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -161,34 +214,38 @@ class _ShareInvoiceBottomSheetState extends State<ShareInvoiceBottomSheet> {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
 
             // Header Title & Close Button
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Share & Remind Client',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF0F172A),
-                        letterSpacing: -0.4,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Share & Remind Client',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF0F172A),
+                          letterSpacing: -0.4,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Invoice #${widget.invoice.invoiceNumber} • ${widget.invoice.client.name}',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: Color(0xFF64748B),
-                        fontWeight: FontWeight.w500,
+                      const SizedBox(height: 2),
+                      Text(
+                        'Invoice #${widget.invoice.invoiceNumber} • ${widget.invoice.client.name}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF64748B),
+                          fontWeight: FontWeight.w500,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
@@ -196,7 +253,7 @@ class _ShareInvoiceBottomSheetState extends State<ShareInvoiceBottomSheet> {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
 
             // Quick Actions: Direct PDF Share & Print
             Row(
@@ -209,7 +266,7 @@ class _ShareInvoiceBottomSheetState extends State<ShareInvoiceBottomSheet> {
                     textColor: const Color(0xFFFF5722),
                     onTap: () {
                       Navigator.of(context).pop();
-                      PdfService.shareInvoice(widget.invoice, widget.profile);
+                      PdfService.shareInvoice(widget.invoice, widget.profile, templateId: widget.templateId);
                     },
                   ),
                 ),
@@ -222,13 +279,13 @@ class _ShareInvoiceBottomSheetState extends State<ShareInvoiceBottomSheet> {
                     textColor: const Color(0xFF0F172A),
                     onTap: () {
                       Navigator.of(context).pop();
-                      PdfService.printInvoice(widget.invoice, widget.profile);
+                      PdfService.printInvoice(widget.invoice, widget.profile, templateId: widget.templateId);
                     },
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 16),
 
             // Template Selector Chips
             const Text(
@@ -264,6 +321,12 @@ class _ShareInvoiceBottomSheetState extends State<ShareInvoiceBottomSheet> {
                   ),
                   const SizedBox(width: 8),
                   _TemplateChip(
+                    label: '🤝 Formal Notice',
+                    isSelected: _selectedTemplate == WhatsAppTemplateType.formalNotice,
+                    onTap: () => _onTemplateChanged(WhatsAppTemplateType.formalNotice),
+                  ),
+                  const SizedBox(width: 8),
+                  _TemplateChip(
                     label: '🎉 Paid Receipt',
                     isSelected: _selectedTemplate == WhatsAppTemplateType.paymentReceipt,
                     onTap: () => _onTemplateChanged(WhatsAppTemplateType.paymentReceipt),
@@ -273,7 +336,7 @@ class _ShareInvoiceBottomSheetState extends State<ShareInvoiceBottomSheet> {
             ),
             const SizedBox(height: 14),
 
-            // Message Preview & Editor
+            // Message Preview & Editor Header
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -285,22 +348,83 @@ class _ShareInvoiceBottomSheetState extends State<ShareInvoiceBottomSheet> {
                     color: Color(0xFF64748B),
                   ),
                 ),
-                TextButton.icon(
-                  onPressed: _handleCopyMessage,
-                  icon: const Icon(Icons.copy_rounded, size: 14, color: Color(0xFFFF5722)),
-                  label: const Text(
-                    'Copy Text',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFFF5722)),
-                  ),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
+                Row(
+                  children: [
+                    TextButton.icon(
+                      onPressed: _handleResetTemplate,
+                      icon: const Icon(Icons.refresh_rounded, size: 13, color: Color(0xFF64748B)),
+                      label: const Text(
+                        'Reset',
+                        style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
+                      ),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    TextButton.icon(
+                      onPressed: _handleCopyMessage,
+                      icon: const Icon(Icons.copy_rounded, size: 13, color: Color(0xFFFF5722)),
+                      label: const Text(
+                        'Copy',
+                        style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFFFF5722)),
+                      ),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
             const SizedBox(height: 6),
+
+            // Quick Insert Placeholders Bar
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: Row(
+                children: [
+                  _TagChip(
+                    label: '+ Client',
+                    onTap: () => _insertTag(widget.invoice.client.name.isNotEmpty ? widget.invoice.client.name : 'Client'),
+                  ),
+                  const SizedBox(width: 6),
+                  _TagChip(
+                    label: '+ Amount',
+                    onTap: () {
+                      final currencyFormat = CurrencyTaxService.getCurrencyFormatter(
+                        currencyCode: widget.profile.currency,
+                        decimalDigits: 2,
+                      );
+                      _insertTag(currencyFormat.format(widget.invoice.total));
+                    },
+                  ),
+                  const SizedBox(width: 6),
+                  _TagChip(
+                    label: '+ Due Date',
+                    onTap: () => _insertTag(DateFormat('dd MMM yyyy').format(widget.invoice.dueDate)),
+                  ),
+                  const SizedBox(width: 6),
+                  _TagChip(
+                    label: '+ Inv #',
+                    onTap: () => _insertTag('#${widget.invoice.invoiceNumber}'),
+                  ),
+                  if (widget.profile.upiId != null && widget.profile.upiId!.isNotEmpty) ...[
+                    const SizedBox(width: 6),
+                    _TagChip(
+                      label: '+ UPI ID',
+                      onTap: () => _insertTag('UPI: ${widget.profile.upiId}'),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
 
             Container(
               decoration: BoxDecoration(
@@ -310,48 +434,42 @@ class _ShareInvoiceBottomSheetState extends State<ShareInvoiceBottomSheet> {
               ),
               child: TextField(
                 controller: _messageController,
-                maxLines: 7,
-                style: const TextStyle(fontSize: 13.5, color: Color(0xFF0F172A), height: 1.45),
+                minLines: 3,
+                maxLines: 5,
+                style: const TextStyle(fontSize: 13, color: Color(0xFF0F172A), height: 1.4),
                 decoration: const InputDecoration(
-                  contentPadding: EdgeInsets.all(14),
+                  contentPadding: EdgeInsets.all(12),
                   border: InputBorder.none,
                   hintText: 'Type your message...',
                   hintStyle: TextStyle(color: Color(0xFF94A3B8)),
                 ),
               ),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 16),
 
             // Primary WhatsApp Dispatch CTA Button
             SizedBox(
               width: double.infinity,
-              height: 54,
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF25D366), Color(0xFF128C7E)],
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                  ),
-                  borderRadius: BorderRadius.circular(27),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF25D366).withValues(alpha: 0.35),
-                      blurRadius: 16,
-                      offset: const Offset(0, 6),
+              height: 52,
+              child: BouncingButton(
+                onTap: _isSending ? null : _handleSendWhatsApp,
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF25D366), Color(0xFF128C7E)],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
                     ),
-                  ],
-                ),
-                child: ElevatedButton(
-                  onPressed: _isSending ? null : _handleSendWhatsApp,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.transparent,
-                    shadowColor: Colors.transparent,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(27),
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    borderRadius: BorderRadius.circular(26),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF25D366).withValues(alpha: 0.35),
+                        blurRadius: 16,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
                   ),
+                  alignment: Alignment.center,
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -361,15 +479,19 @@ class _ShareInvoiceBottomSheetState extends State<ShareInvoiceBottomSheet> {
                         size: 20,
                       ),
                       const SizedBox(width: 10),
-                      Text(
-                        clientPhone.isNotEmpty
-                            ? 'Send to WhatsApp ($clientPhone)'
-                            : 'Send to WhatsApp',
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                          letterSpacing: -0.2,
+                      Flexible(
+                        child: Text(
+                          clientPhone.isNotEmpty
+                              ? 'Send to WhatsApp ($clientPhone)'
+                              : 'Send to WhatsApp',
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            letterSpacing: -0.2,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
@@ -440,33 +562,62 @@ class _ActionPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: color,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
-          ),
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 16, color: textColor),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w700,
-                  color: textColor,
-                ),
+    return BouncingButton(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 16, color: textColor),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: textColor,
               ),
-            ],
-          ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TagChip extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+
+  const _TagChip({required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFCBD5E1)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.add_rounded, size: 13, color: Color(0xFFFF5722)),
+            const SizedBox(width: 3),
+            Text(
+              label.replaceFirst('+ ', ''),
+              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
+            ),
+          ],
         ),
       ),
     );

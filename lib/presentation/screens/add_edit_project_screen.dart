@@ -100,10 +100,16 @@ class _AddEditProjectScreenState extends ConsumerState<AddEditProjectScreen> {
   void _saveProject() {
     if (!_formKey.currentState!.validate()) return;
 
-    final clientName = _selectedClient?.name ?? _clientNameController.text.trim();
-    final clientId = _selectedClient?.id ?? 'client_${DateTime.now().millisecondsSinceEpoch}';
+    final clientName = _selectedClient?.name ?? (_clientNameController.text.trim().isNotEmpty ? _clientNameController.text.trim() : (widget.project?.clientName ?? ''));
+    final clientId = _selectedClient?.id ?? (widget.project?.clientId ?? 'client_${DateTime.now().millisecondsSinceEpoch}');
     final budget = double.tryParse(_budgetController.text.trim()) ?? 0.0;
     final received = double.tryParse(_receivedAmountController.text.trim()) ?? 0.0;
+    if (budget < 0 || received < 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Budget and received amounts cannot be negative.')),
+      );
+      return;
+    }
 
     final isEdit = widget.project != null;
     final project = Project(

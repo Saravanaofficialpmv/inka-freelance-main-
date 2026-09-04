@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -44,6 +46,22 @@ class ErrorHandler {
       }
     }
 
-    return error.toString();
+    if (error is FirebaseException) {
+      if (error.code == 'permission-denied') {
+        return 'Access denied. You do not have permission to perform this action.';
+      }
+      if (error.code == 'unavailable') {
+        return 'The cloud service is temporarily unavailable. Local changes remain saved.';
+      }
+      return error.message ?? 'A database sync error occurred. Please try again.';
+    }
+
+    if (error is TimeoutException) {
+      return 'Request timed out. Please check your internet connection and try again.';
+    }
+
+    // Never leak raw exception strings or stack traces to the user
+    debugPrint('Sanitized Internal App Error: $error');
+    return 'An unexpected issue occurred. Please try again.';
   }
 }

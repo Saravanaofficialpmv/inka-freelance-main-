@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../data/models/expense.dart';
 import '../../services/currency_tax_service.dart';
 import '../providers/profile_provider.dart';
 import '../viewmodels/expense_viewmodel.dart';
 import '../viewmodels/invoice_viewmodel.dart';
+import '../widgets/tibsy_refresh_icon.dart';
 
 class ExpensesScreen extends ConsumerStatefulWidget {
   const ExpensesScreen({super.key});
@@ -46,6 +46,9 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
     final paidAmount = invoices.where((i) => i.isPaid).fold(0.0, (s, i) => s + i.total);
     final unpaidAmount = invoices.where((i) => !i.isPaid && !i.dueDate.isBefore(now)).fold(0.0, (s, i) => s + i.total);
     final overdueAmount = invoices.where((i) => !i.isPaid && i.dueDate.isBefore(now)).fold(0.0, (s, i) => s + i.total);
+    final totalExpenses = expenses.fold(0.0, (s, e) => s + e.amount);
+    final netProfit = totalRevenue - totalExpenses;
+    final profitMargin = totalRevenue > 0 ? ((netProfit / totalRevenue) * 100) : 0.0;
 
     final sortedExpenses = expenses.reversed.toList();
 
@@ -54,38 +57,35 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // ── Top Bar (Back, Title "Statistics", More "...") ──
+            // ── Top Bar (Back, Title "Statistics", Add CTA) ──
             Padding(
               padding: const EdgeInsets.fromLTRB(20.0, 14.0, 20.0, 12.0),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  GestureDetector(
-                    onTap: () {
-                      if (Navigator.of(context).canPop()) {
-                        Navigator.of(context).pop();
-                      } else {
-                        context.go('/dashboard');
-                      }
-                    },
-                    child: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
+                  if (Navigator.of(context).canPop())
+                    GestureDetector(
+                      onTap: () => Navigator.of(context).pop(),
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.04),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF0F172A), size: 18),
                       ),
-                      child: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF0F172A), size: 18),
-                    ),
-                  ),
+                    )
+                  else
+                    const SizedBox(width: 44),
 
                   const Text(
                     'Statistics',
@@ -97,28 +97,32 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                     ),
                   ),
 
-                  GestureDetector(
-                    onTap: () => _showAddExpenseModal(),
-                    child: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFFF5722), Color(0xFFFF7A50)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFFFF5722).withValues(alpha: 0.35),
-                            blurRadius: 10,
-                            offset: const Offset(0, 3),
+                  Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () => _showAddExpenseModal(),
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFFFF5722), Color(0xFFFF7A50)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFFF5722).withValues(alpha: 0.35),
+                                blurRadius: 10,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
                           ),
-                        ],
+                          child: const Icon(Icons.add_rounded, color: Colors.white, size: 24),
+                        ),
                       ),
-                      child: const Icon(Icons.add_rounded, color: Colors.white, size: 24),
-                    ),
+                    ],
                   ),
                 ],
               ),
@@ -126,9 +130,9 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
 
             // ── Scrollable Body ──
             Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
+              child: TibsyPullToRefresh(
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 140),
+                onRefresh: () => syncAndRefreshEntireApp(ref),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -146,7 +150,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
 
                     // ── Summary Banner (Orange Gradient Card) ──
                     Container(
-                      padding: const EdgeInsets.all(22),
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(
                           colors: [Color(0xFFFF5722), Color(0xFFFF7A50)],
@@ -178,20 +182,27 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                             children: [
                               // Paid
                               Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text('Paid', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      currencyFormat.format(paidAmount),
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w900,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('Paid', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                                      const SizedBox(height: 4),
+                                      FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        alignment: Alignment.centerLeft,
+                                        child: Text(
+                                          currencyFormat.format(paidAmount),
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               ),
 
@@ -200,25 +211,30 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                               // Unpaid
                               Expanded(
                                 child: Padding(
-                                  padding: const EdgeInsets.only(left: 12),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8),
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       const Text('Unpaid', style: TextStyle(color: Colors.white70, fontSize: 12)),
                                       const SizedBox(height: 4),
-                                      Row(
-                                        children: [
-                                          Text(
-                                            currencyFormat.format(unpaidAmount),
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w900,
+                                      FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        alignment: Alignment.centerLeft,
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              currencyFormat.format(unpaidAmount),
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w900,
+                                              ),
                                             ),
-                                          ),
-                                          const SizedBox(width: 4),
-                                          const Text('+3.4%', style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold)),
-                                        ],
+                                            const SizedBox(width: 4),
+                                            const Text('+3.4%', style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold)),
+                                          ],
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -230,25 +246,30 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                               // Overdue
                               Expanded(
                                 child: Padding(
-                                  padding: const EdgeInsets.only(left: 12),
+                                  padding: const EdgeInsets.only(left: 8),
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       const Text('Overdue', style: TextStyle(color: Colors.white70, fontSize: 12)),
                                       const SizedBox(height: 4),
-                                      Row(
-                                        children: [
-                                          Text(
-                                            currencyFormat.format(overdueAmount),
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w900,
+                                      FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        alignment: Alignment.centerLeft,
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              currencyFormat.format(overdueAmount),
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w900,
+                                              ),
                                             ),
-                                          ),
-                                          const SizedBox(width: 4),
-                                          const Text('+4%', style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold)),
-                                        ],
+                                            const SizedBox(width: 4),
+                                            const Text('+4%', style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold)),
+                                          ],
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -260,7 +281,117 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                       ),
                     ),
 
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 18),
+
+                    // ── Financial Health (Expenses vs Net Profit) ──
+                    Container(
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.03),
+                            blurRadius: 10,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          // Total Spent
+                          Expanded(
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFEF4444).withValues(alpha: 0.1),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.arrow_outward_rounded, color: Color(0xFFEF4444), size: 20),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('Total Spent', style: TextStyle(color: Color(0xFF64748B), fontSize: 11.5, fontWeight: FontWeight.w600)),
+                                      const SizedBox(height: 2),
+                                      FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        alignment: Alignment.centerLeft,
+                                        child: Text(
+                                          currencyFormat.format(totalExpenses),
+                                          style: const TextStyle(
+                                            color: Color(0xFF0F172A),
+                                            fontSize: 15.5,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          Container(width: 1, height: 36, color: const Color(0xFFE2E8F0)),
+                          const SizedBox(width: 12),
+
+                          // Net Profit
+                          Expanded(
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: (netProfit >= 0 ? const Color(0xFF10B981) : const Color(0xFFEF4444)).withValues(alpha: 0.1),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    netProfit >= 0 ? Icons.trending_up_rounded : Icons.trending_down_rounded,
+                                    color: netProfit >= 0 ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                                    size: 20,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Net Profit (${profitMargin.toStringAsFixed(0)}%)',
+                                        style: const TextStyle(color: Color(0xFF64748B), fontSize: 11.5, fontWeight: FontWeight.w600),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        alignment: Alignment.centerLeft,
+                                        child: Text(
+                                          currencyFormat.format(netProfit),
+                                          style: TextStyle(
+                                            color: netProfit >= 0 ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                                            fontSize: 15.5,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 18),
 
                     // ── Analytics Curve Chart Card ──
                     Container(
@@ -280,13 +411,12 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Header: Stat ($53.200) + Dropdown (Monthly v)
+                          // Header: Stat + Growth Badge + Dropdown
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Row(
-                                crossAxisAlignment: CrossAxisAlignment.baseline,
-                                textBaseline: TextBaseline.alphabetic,
+                                crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
                                   Text(
                                     currencyFormat.format(totalRevenue),
@@ -297,13 +427,20 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                                       letterSpacing: -0.5,
                                     ),
                                   ),
-                                  const SizedBox(width: 6),
-                                  const Text(
-                                    '(2.1%)',
-                                    style: TextStyle(
-                                      color: Color(0xFF64748B),
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFECFDF5),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Text(
+                                      '+2.1%',
+                                      style: TextStyle(
+                                        color: Color(0xFF10B981),
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w700,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -311,17 +448,17 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
 
                               // Timeframe dropdown selector
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFF1F5F9),
+                                  color: const Color(0xFFFFF0EB),
                                   borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                                  border: Border.all(color: const Color(0xFFFF5722).withValues(alpha: 0.2)),
                                 ),
                                 child: DropdownButton<String>(
                                   value: _selectedTimeframe,
                                   underline: const SizedBox(),
                                   dropdownColor: Colors.white,
-                                  icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF64748B), size: 18),
+                                  icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFFFF5722), size: 18),
                                   isDense: true,
                                   items: ['Weekly', 'Monthly', 'Yearly'].map((t) {
                                     return DropdownMenuItem<String>(
@@ -445,74 +582,77 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                       )
                     else
                       ...sortedExpenses.map((expense) {
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: const Color(0xFFE2E8F0)),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.03),
-                                blurRadius: 10,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            children: [
-                              // Circular Brand/Category Icon
-                              Container(
-                                width: 44,
-                                height: 44,
-                                decoration: BoxDecoration(
-                                  color: _getCategoryColor(expense.category).withValues(alpha: 0.12),
-                                  shape: BoxShape.circle,
+                        return GestureDetector(
+                          onTap: () => _showAddExpenseModal(expense),
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.03),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 2),
                                 ),
-                                child: Icon(
-                                  _getCategoryIcon(expense.category),
-                                  color: _getCategoryColor(expense.category),
-                                  size: 20,
+                              ],
+                            ),
+                            child: Row(
+                              children: [
+                                // Circular Brand/Category Icon
+                                Container(
+                                  width: 44,
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    color: _getCategoryColor(expense.category).withValues(alpha: 0.12),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    _getCategoryIcon(expense.category),
+                                    color: _getCategoryColor(expense.category),
+                                    size: 20,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 14),
+                                const SizedBox(width: 14),
 
-                              // Description & Date
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      expense.title.isNotEmpty ? expense.title : expense.category,
-                                      style: const TextStyle(
-                                        color: Color(0xFF0F172A),
-                                        fontSize: 14.5,
-                                        fontWeight: FontWeight.bold,
+                                // Description & Date
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        expense.title.isNotEmpty ? expense.title : expense.category,
+                                        style: const TextStyle(
+                                          color: Color(0xFF0F172A),
+                                          fontSize: 14.5,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      DateFormat('dd MMM, yyyy').format(expense.date),
-                                      style: const TextStyle(
-                                        color: Color(0xFF64748B),
-                                        fontSize: 12,
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        DateFormat('dd MMM, yyyy').format(expense.date),
+                                        style: const TextStyle(
+                                          color: Color(0xFF64748B),
+                                          fontSize: 12,
+                                        ),
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
-                              ),
 
-                              // Amount
-                              Text(
-                                currencyFormat.format(expense.amount),
-                                style: const TextStyle(
-                                  color: Color(0xFF0F172A),
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.bold,
+                                // Amount
+                                Text(
+                                  currencyFormat.format(expense.amount),
+                                  style: const TextStyle(
+                                    color: Color(0xFF0F172A),
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         );
                       }),
@@ -558,7 +698,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
       case 'travel':
         return const Color(0xFF14B8A6);
       case 'utilities':
-        return const Color(0xFF06B6D4);
+        return const Color(0xFFF59E0B);
       default:
         return const Color(0xFFFF5722);
     }
@@ -604,7 +744,7 @@ class _StatisticsChartPainter extends CustomPainter {
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
-          const Color(0xFFFF5722).withValues(alpha: 0.25),
+          const Color(0xFFFF5722).withValues(alpha: 0.22),
           const Color(0xFFFF5722).withValues(alpha: 0.0),
         ],
       ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
@@ -795,7 +935,7 @@ class _ExpenseFormBottomSheetState extends ConsumerState<_ExpenseFormBottomSheet
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 style: const TextStyle(color: Color(0xFF0F172A)),
                 decoration: const InputDecoration(
-                  labelText: 'Amount (\$)',
+                  labelText: 'Amount',
                   hintText: '0.00',
                   fillColor: Color(0xFFF8FAFC),
                   filled: true,
@@ -824,18 +964,35 @@ class _ExpenseFormBottomSheetState extends ConsumerState<_ExpenseFormBottomSheet
               const SizedBox(height: 24),
 
               // Save Button
-              ElevatedButton(
-                onPressed: _save,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF5722),
-                  minimumSize: const Size.fromHeight(54),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                  elevation: 0,
-                  shadowColor: const Color(0xFFFF5722).withValues(alpha: 0.4),
+              Container(
+                width: double.infinity,
+                height: 54,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFFF5722), Color(0xFFFF7A50)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFFF5722).withValues(alpha: 0.35),
+                      blurRadius: 14,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
-                child: Text(
-                  widget.expense != null ? 'Update Expense' : 'Save Expense',
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                child: ElevatedButton(
+                  onPressed: _save,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    shadowColor: Colors.transparent,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  ),
+                  child: Text(
+                    widget.expense != null ? 'Update Expense' : 'Save Expense',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
                 ),
               ),
             ],

@@ -7,6 +7,7 @@ import '../../services/currency_tax_service.dart';
 import '../providers/profile_provider.dart';
 import '../viewmodels/invoice_viewmodel.dart';
 import '../viewmodels/project_viewmodel.dart';
+import '../widgets/status_badge.dart';
 import 'create_invoice_screen.dart';
 
 class ProjectDetailsScreen extends ConsumerWidget {
@@ -476,7 +477,6 @@ class ProjectDetailsScreen extends ConsumerWidget {
                           )
                         else
                           ...relatedInvoices.map((inv) {
-                            final isPaid = inv.status.toLowerCase() == 'paid';
                             return Container(
                               margin: const EdgeInsets.only(bottom: 8),
                               padding: const EdgeInsets.all(12),
@@ -509,20 +509,12 @@ class ProjectDetailsScreen extends ConsumerWidget {
                                         style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Color(0xFF0F172A)),
                                       ),
                                       const SizedBox(width: 8),
-                                      Container(
+                                      StatusBadge(
+                                        status: inv.status,
+                                        dueDate: inv.dueDate,
+                                        fontSize: 10.5,
                                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                        decoration: BoxDecoration(
-                                          color: isPaid ? const Color(0xFFECFDF5) : const Color(0xFFFFFBEB),
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: Text(
-                                          inv.status.toUpperCase(),
-                                          style: TextStyle(
-                                            color: isPaid ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                        ),
+                                        onTap: () => ref.read(invoiceProvider.notifier).togglePaymentStatus(inv.id),
                                       ),
                                     ],
                                   ),

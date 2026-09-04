@@ -61,6 +61,9 @@ class BusinessProfile {
   @HiveField(18)
   final String? taxIdNumber; // e.g. "VAT Reg #", "EIN / Tax ID", "GSTIN"
 
+  @HiveField(19)
+  final String invoiceTemplate; // 'modern', 'classic', 'emerald', 'minimal'
+
   BusinessProfile({
     required this.businessName,
     required this.address,
@@ -81,6 +84,7 @@ class BusinessProfile {
     this.defaultTaxRate = 0.0,
     this.isTaxInclusive = false,
     this.taxIdNumber,
+    this.invoiceTemplate = 'modern',
   });
 
   factory BusinessProfile.empty() {
@@ -103,6 +107,7 @@ class BusinessProfile {
       defaultTaxRate: 0.0,
       isTaxInclusive: false,
       taxIdNumber: '',
+      invoiceTemplate: 'modern',
     );
   }
 
@@ -126,6 +131,7 @@ class BusinessProfile {
     double? defaultTaxRate,
     bool? isTaxInclusive,
     String? taxIdNumber,
+    String? invoiceTemplate,
   }) {
     return BusinessProfile(
       businessName: businessName ?? this.businessName,
@@ -147,6 +153,7 @@ class BusinessProfile {
       defaultTaxRate: defaultTaxRate ?? this.defaultTaxRate,
       isTaxInclusive: isTaxInclusive ?? this.isTaxInclusive,
       taxIdNumber: taxIdNumber ?? this.taxIdNumber,
+      invoiceTemplate: invoiceTemplate ?? this.invoiceTemplate,
     );
   }
 
@@ -171,6 +178,7 @@ class BusinessProfile {
       'defaultTaxRate': defaultTaxRate,
       'isTaxInclusive': isTaxInclusive,
       'taxIdNumber': taxIdNumber,
+      'invoiceTemplate': invoiceTemplate,
     };
   }
 
@@ -195,6 +203,7 @@ class BusinessProfile {
       defaultTaxRate: (map['defaultTaxRate'] as num?)?.toDouble() ?? 0.0,
       isTaxInclusive: map['isTaxInclusive'] ?? false,
       taxIdNumber: map['taxIdNumber'] ?? map['gstNumber'],
+      invoiceTemplate: map['invoiceTemplate'] ?? 'modern',
     );
   }
 }

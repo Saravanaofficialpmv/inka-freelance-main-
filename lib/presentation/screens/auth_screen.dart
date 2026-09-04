@@ -381,7 +381,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                         }
                       } catch (e) {
                         if (ctx.mounted) {
-                          _showError(ErrorHandler.getErrorMessage(e));
+                          _showError(e is String ? e : ErrorHandler.getErrorMessage(e));
                         }
                       }
                     },

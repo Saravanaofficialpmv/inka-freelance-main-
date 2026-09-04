@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -223,7 +224,7 @@ class _CreateInvoiceScreenState extends ConsumerState<CreateInvoiceScreen> {
                     decoration: InputDecoration(
                       hintText: 'Unit Price',
                       hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13.5),
-                      prefixText: '\$ ',
+                      prefixText: '${CurrencyTaxService.getCurrencySymbol(ref.watch(profileProvider).currency)} ',
                       prefixStyle: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold),
                       filled: true,
                       fillColor: const Color(0xFFF8FAFC),
@@ -398,10 +399,10 @@ class _CreateInvoiceScreenState extends ConsumerState<CreateInvoiceScreen> {
       items: List.from(_items),
       issueDate: _issueDate,
       dueDate: _dueDate,
-      taxPercentage: taxRate,
-      discount: 0.0,
+      taxPercentage: widget.invoiceToEdit?.taxPercentage ?? taxRate,
+      discount: widget.invoiceToEdit?.discount ?? 0.0,
       notes: _notes,
-      status: widget.invoiceToEdit?.status ?? 'unpaid',
+      status: widget.invoiceToEdit?.status ?? 'pending',
     );
 
     if (widget.invoiceToEdit != null) {
@@ -678,6 +679,25 @@ class _CreateInvoiceScreenState extends ConsumerState<CreateInvoiceScreen> {
                         ),
                       ),
                     ],
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // Quick Due Date Presets
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
+                    child: Row(
+                      children: [
+                        _buildDueDatePresetChip('Due on Receipt', 0),
+                        const SizedBox(width: 8),
+                        _buildDueDatePresetChip('+7 Days', 7),
+                        const SizedBox(width: 8),
+                        _buildDueDatePresetChip('+14 Days', 14),
+                        const SizedBox(width: 8),
+                        _buildDueDatePresetChip('+30 Days', 30),
+                      ],
+                    ),
                   ),
 
                   const SizedBox(height: 20),
@@ -999,6 +1019,49 @@ class _CreateInvoiceScreenState extends ConsumerState<CreateInvoiceScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FA),
       body: SafeArea(child: contentWidget),
+    );
+  }
+
+  Widget _buildDueDatePresetChip(String label, int days) {
+    final targetDate = days == 0 ? _issueDate : _issueDate.add(Duration(days: days));
+    final isSelected = DateUtils.isSameDay(_dueDate, targetDate);
+
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        setState(() {
+          _dueDate = targetDate;
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFFFFECE8) : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? const Color(0xFFFF5722) : const Color(0xFFE2E8F0),
+            width: isSelected ? 1.3 : 1.0,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFFFF5722).withValues(alpha: 0.15),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11.5,
+            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+            color: isSelected ? const Color(0xFFFF5722) : const Color(0xFF64748B),
+          ),
+        ),
+      ),
     );
   }
 }

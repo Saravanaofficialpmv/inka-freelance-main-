@@ -7,6 +7,8 @@ import '../providers/client_provider.dart';
 import '../providers/profile_provider.dart';
 import '../viewmodels/invoice_viewmodel.dart';
 import '../../services/currency_tax_service.dart';
+import '../../services/contact_service.dart';
+import '../widgets/status_badge.dart';
 import 'create_invoice_screen.dart';
 
 class ClientDetailsScreen extends ConsumerWidget {
@@ -39,7 +41,7 @@ class ClientDetailsScreen extends ConsumerWidget {
     final unpaidSum = unpaidInvoices.fold<double>(0.0, (sum, i) => sum + i.total);
     final totalSum = paidSum + unpaidSum;
 
-    final ratioProgress = totalSum > 0 ? (paidSum / totalSum).clamp(0.0, 1.0) : 0.75;
+    final ratioProgress = totalSum > 0 ? (paidSum / totalSum).clamp(0.0, 1.0) : 0.0;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FA),
@@ -53,7 +55,7 @@ class ClientDetailsScreen extends ConsumerWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   GestureDetector(
-                    onTap: () => context.pop(),
+                    onTap: () => context.canPop() ? context.pop() : context.go('/clients-tab'),
                     child: Container(
                       width: 44,
                       height: 44,
@@ -89,7 +91,66 @@ class ClientDetailsScreen extends ConsumerWidget {
                       shape: BoxShape.circle,
                       border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
                     ),
-                    child: const Icon(Icons.more_horiz_rounded, size: 20, color: Color(0xFF0F172A)),
+                    child: PopupMenuButton<String>(
+                      icon: const Icon(Icons.more_horiz_rounded, size: 20, color: Color(0xFF0F172A)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      onSelected: (value) {
+                        if (value == 'call' && currentClient.phone.isNotEmpty) {
+                          ContactService.makeCall(context, currentClient.phone);
+                        } else if (value == 'whatsapp' && currentClient.phone.isNotEmpty) {
+                          ContactService.openWhatsApp(context, currentClient.phone);
+                        } else if (value == 'email' && currentClient.email.isNotEmpty) {
+                          ContactService.sendEmail(context, currentClient.email);
+                        } else if (value == 'delete') {
+                          _confirmDelete(context, ref, currentClient);
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        if (currentClient.phone.isNotEmpty)
+                          const PopupMenuItem(
+                            value: 'call',
+                            child: Row(
+                              children: [
+                                Icon(Icons.phone_outlined, size: 18, color: Color(0xFF0F172A)),
+                                SizedBox(width: 10),
+                                Text('Call Client', style: TextStyle(fontSize: 14)),
+                              ],
+                            ),
+                          ),
+                        if (currentClient.phone.isNotEmpty)
+                          const PopupMenuItem(
+                            value: 'whatsapp',
+                            child: Row(
+                              children: [
+                                Icon(Icons.chat_bubble_outline_rounded, size: 18, color: Color(0xFF25D366)),
+                                SizedBox(width: 10),
+                                Text('Send WhatsApp', style: TextStyle(fontSize: 14)),
+                              ],
+                            ),
+                          ),
+                        if (currentClient.email.isNotEmpty)
+                          const PopupMenuItem(
+                            value: 'email',
+                            child: Row(
+                              children: [
+                                Icon(Icons.email_outlined, size: 18, color: Color(0xFF0F172A)),
+                                SizedBox(width: 10),
+                                Text('Send Email', style: TextStyle(fontSize: 14)),
+                              ],
+                            ),
+                          ),
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete_outline_rounded, size: 18, color: Colors.red),
+                              SizedBox(width: 10),
+                              Text('Delete Client', style: TextStyle(color: Colors.red, fontSize: 14)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -137,11 +198,40 @@ class ClientDetailsScreen extends ConsumerWidget {
                             ),
                             textAlign: TextAlign.center,
                           ),
+
+                          const SizedBox(height: 16),
+
+                          // ── Quick Contact Actions ──
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              _buildContactButton(
+                                icon: Icons.phone_rounded,
+                                label: 'Call',
+                                color: const Color(0xFFFF5722),
+                                onTap: () => ContactService.makeCall(context, currentClient.phone),
+                              ),
+                              const SizedBox(width: 10),
+                              _buildContactButton(
+                                icon: Icons.chat_rounded,
+                                label: 'WhatsApp',
+                                color: const Color(0xFF10B981),
+                                onTap: () => ContactService.openWhatsApp(context, currentClient.phone),
+                              ),
+                              const SizedBox(width: 10),
+                              _buildContactButton(
+                                icon: Icons.email_rounded,
+                                label: 'Email',
+                                color: const Color(0xFF0F172A),
+                                onTap: () => ContactService.sendEmail(context, currentClient.email),
+                              ),
+                            ],
+                          ),
                         ],
                       ),
                     ),
 
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 20),
 
                     // ── 3 Stat Cards Row (Total Invoices, Paid, Unpaid) ──
                     Row(
@@ -285,7 +375,6 @@ class ClientDetailsScreen extends ConsumerWidget {
                         itemCount: clientInvoices.length,
                         itemBuilder: (ctx, index) {
                           final inv = clientInvoices[index];
-                          final isPaid = inv.status.toLowerCase() == 'paid';
 
                           return Container(
                             margin: const EdgeInsets.only(bottom: 10),
@@ -350,23 +439,12 @@ class ClientDetailsScreen extends ConsumerWidget {
                                       ],
                                     ),
                                   ),
-                                  Container(
+                                  StatusBadge(
+                                    status: inv.status,
+                                    dueDate: inv.dueDate,
+                                    fontSize: 11.5,
                                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: isPaid ? const Color(0xFFECFDF5) : const Color(0xFFFFF1ED),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: isPaid ? const Color(0xFF10B981).withValues(alpha: 0.3) : const Color(0xFFFF5722).withValues(alpha: 0.3),
-                                      ),
-                                    ),
-                                    child: Text(
-                                      isPaid ? 'Paid' : 'Unpaid',
-                                      style: TextStyle(
-                                        fontSize: 11.5,
-                                        fontWeight: FontWeight.bold,
-                                        color: isPaid ? const Color(0xFF10B981) : const Color(0xFFFF5722),
-                                      ),
-                                    ),
+                                    onTap: () => ref.read(invoiceProvider.notifier).togglePaymentStatus(inv.id),
                                   ),
                                 ],
                               ),
@@ -401,7 +479,7 @@ class ClientDetailsScreen extends ConsumerWidget {
                 child: ElevatedButton(
                   onPressed: () => CreateInvoiceScreen.showAsBottomSheet(context),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF9BD71B),
+                    backgroundColor: const Color(0xFFFF5722),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
                     elevation: 0,
                   ),
@@ -410,7 +488,7 @@ class ClientDetailsScreen extends ConsumerWidget {
                     style: TextStyle(
                       fontSize: 15.5,
                       fontWeight: FontWeight.w900,
-                      color: Color(0xFF0F172A),
+                      color: Colors.white,
                     ),
                   ),
                 ),
@@ -466,6 +544,75 @@ class ClientDetailsScreen extends ConsumerWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildContactButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: color.withValues(alpha: 0.25)),
+          boxShadow: [
+            BoxShadow(
+              color: color.withValues(alpha: 0.08),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _confirmDelete(BuildContext context, WidgetRef ref, Client currentClient) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Client?'),
+        content: Text('Are you sure you want to delete ${currentClient.name}? This cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              ref.read(clientProvider.notifier).deleteClient(currentClient.id);
+              Navigator.pop(ctx);
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/clients-tab');
+              }
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
       ),
     );
   }

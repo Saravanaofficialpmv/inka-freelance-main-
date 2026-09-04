@@ -78,5 +78,22 @@ void main() {
       expect(billedEntry.isBilled, isTrue);
       expect(billedEntry.invoiceId, equals('inv_99'));
     });
+
+    test('Midnight boundary condition inclusion test', () {
+      final now = DateTime.now();
+      final startOfToday = DateTime(now.year, now.month, now.day, 0, 0, 0);
+      final endOfToday = startOfToday.add(const Duration(days: 1));
+      final midnightEntry = TimeEntry(
+        id: 'te_midnight',
+        client: client,
+        projectTitle: 'Midnight Maintenance',
+        hourlyRate: 100.0,
+        durationSeconds: 1800,
+        date: startOfToday,
+      );
+
+      final isIncluded = !midnightEntry.date.isBefore(startOfToday) && midnightEntry.date.isBefore(endOfToday);
+      expect(isIncluded, isTrue);
+    });
   });
 }

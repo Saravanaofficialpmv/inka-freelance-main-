@@ -36,13 +36,14 @@ class BusinessProfileAdapter extends TypeAdapter<BusinessProfile> {
       defaultTaxRate: fields[16] as double? ?? 0.0,
       isTaxInclusive: fields[17] as bool? ?? false,
       taxIdNumber: fields[18] as String?,
+      invoiceTemplate: fields[19] as String? ?? 'modern',
     );
   }
 
   @override
   void write(BinaryWriter writer, BusinessProfile obj) {
     writer
-      ..writeByte(19)
+      ..writeByte(20)
       ..writeByte(0)
       ..write(obj.businessName)
       ..writeByte(1)
@@ -80,7 +81,9 @@ class BusinessProfileAdapter extends TypeAdapter<BusinessProfile> {
       ..writeByte(17)
       ..write(obj.isTaxInclusive)
       ..writeByte(18)
-      ..write(obj.taxIdNumber);
+      ..write(obj.taxIdNumber)
+      ..writeByte(19)
+      ..write(obj.invoiceTemplate);
   }
 
   @override

@@ -8,6 +8,7 @@ enum WhatsAppTemplateType {
   newInvoice,
   friendlyReminder,
   overdueNotice,
+  formalNotice,
   paymentReceipt,
 }
 
@@ -56,6 +57,15 @@ class WhatsAppService {
             'Our records indicate that invoice *#${invoice.invoiceNumber}* for *$totalFormatted* was due on *$dueFormatted* and remains outstanding.\n\n'
             '${_buildPaymentDetails(profile)}'
             'Kindly settle this invoice at your earliest convenience. If you need any assistance or have already made the transfer, please reply to this message.\n\n'
+            'Sincerely,\n*$businessName*';
+
+      case WhatsAppTemplateType.formalNotice:
+        return 'Dear *$clientName*,\n\n'
+            'Please find the billing statement and reference for invoice *#${invoice.invoiceNumber}* issued by *$businessName*.\n\n'
+            '• *Invoice Total:* *$totalFormatted*\n'
+            '• *Due Date:* $dueFormatted\n'
+            '${_buildPaymentDetails(profile)}'
+            'Kindly ensure payment is remitted by the specified date. Thank you for your continued partnership.\n\n'
             'Sincerely,\n*$businessName*';
 
       case WhatsAppTemplateType.paymentReceipt:

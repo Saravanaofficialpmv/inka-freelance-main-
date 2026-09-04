@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import '../providers/profile_provider.dart';
-import '../../data/models/business_profile.dart';
 import '../../core/localization/app_localizations.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -20,8 +19,19 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
   final _addressController = TextEditingController();
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
-  String _selectedCurrency = '\$';
+  String _selectedCurrency = 'USD';
   String? _selectedLogoPath;
+
+  static const Map<String, String> _currencyMap = {
+    'USD': '\$ USD (US Dollar)',
+    'INR': '₹ INR (Indian Rupee)',
+    'EUR': '€ EUR (Euro)',
+    'GBP': '£ GBP (British Pound)',
+    'JPY': '¥ JPY (Japanese Yen)',
+    'CAD': '\$ CAD (Canadian Dollar)',
+    'AUD': '\$ AUD (Australian Dollar)',
+    'AED': 'AED (UAE Dirham)',
+  };
 
   @override
   void initState() {
@@ -34,6 +44,14 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
       _phoneController.text = profile.phone;
       _emailController.text = profile.email;
       _selectedCurrency = profile.currency;
+      if (_selectedCurrency == '\$') _selectedCurrency = 'USD';
+      if (_selectedCurrency == '₹') _selectedCurrency = 'INR';
+      if (_selectedCurrency == '€') _selectedCurrency = 'EUR';
+      if (_selectedCurrency == '£') _selectedCurrency = 'GBP';
+      if (_selectedCurrency == '¥') _selectedCurrency = 'JPY';
+      if (!_currencyMap.containsKey(_selectedCurrency)) {
+        _selectedCurrency = 'USD';
+      }
       _selectedLogoPath = profile.logoUrl;
     } else {
       if (user?.email != null && user!.email!.isNotEmpty) {
@@ -72,7 +90,8 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
       return;
     }
 
-    final newProfile = BusinessProfile(
+    final existingProfile = ref.read(profileProvider);
+    final newProfile = existingProfile.copyWith(
       businessName: _nameController.text.trim(),
       address: _addressController.text.trim(),
       phone: _phoneController.text.trim(),
@@ -236,11 +255,11 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
                             });
                           }
                         },
-                        items: ['\$', '₹', '€', '£', '¥']
-                            .map<DropdownMenuItem<String>>((String value) {
+                        items: _currencyMap.entries
+                            .map<DropdownMenuItem<String>>((entry) {
                           return DropdownMenuItem<String>(
-                            value: value,
-                            child: Text(value, style: const TextStyle(color: Color(0xFF0F172A))),
+                            value: entry.key,
+                            child: Text(entry.value, style: const TextStyle(color: Color(0xFF0F172A))),
                           );
                         }).toList(),
                       ),

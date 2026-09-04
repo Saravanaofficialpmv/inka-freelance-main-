@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -7,8 +8,13 @@ import '../providers/profile_provider.dart';
 import '../viewmodels/invoice_viewmodel.dart';
 import '../../services/currency_tax_service.dart';
 import '../../services/pdf_service.dart';
+import 'package:printing/printing.dart';
 import '../widgets/share_invoice_bottom_sheet.dart';
 import '../widgets/payment_qr_sheet.dart';
+import '../widgets/status_badge.dart';
+import '../widgets/pdf_shimmer_skeleton.dart';
+import '../widgets/bouncing_button.dart';
+import '../widgets/celebration_sparkle.dart';
 
 class InvoicePreviewScreen extends ConsumerStatefulWidget {
   final Invoice invoice;
@@ -21,6 +27,8 @@ class InvoicePreviewScreen extends ConsumerStatefulWidget {
 
 class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
   int _activeItemIndex = 0;
+  int _selectedViewTab = 0; // 0: Summary, 1: PDF Document
+  String? _selectedTemplateId;
   late PageController _pageController;
 
   @override
@@ -35,6 +43,28 @@ class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
     super.dispose();
   }
 
+  void _handleSetDefaultTemplate(String templateId) {
+    HapticFeedback.mediumImpact();
+    final profile = ref.read(profileProvider);
+    final updatedProfile = profile.copyWith(invoiceTemplate: templateId);
+    ref.read(profileProvider.notifier).updateProfile(updatedProfile);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 18),
+            const SizedBox(width: 8),
+            Text('Saved as default template!'),
+          ],
+        ),
+        backgroundColor: const Color(0xFF0F172A),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final liveInvoices = ref.watch(invoiceProvider);
@@ -44,7 +74,7 @@ class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
     );
 
     final profile = ref.watch(profileProvider);
-    final isPaid = currentInvoice.status.toLowerCase() == 'paid';
+    final activeTemplateId = _selectedTemplateId ?? (profile.invoiceTemplate.isNotEmpty ? profile.invoiceTemplate : 'modern');
 
     final currencyFormat = CurrencyTaxService.getCurrencyFormatter(
       currencyCode: profile.currency.isNotEmpty ? profile.currency : 'USD',
@@ -56,8 +86,8 @@ class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
     final discountAmount = currentInvoice.discount;
     final grandTotal = currentInvoice.total;
 
-    final senderName = profile.businessName.isNotEmpty ? profile.businessName : 'Jamil Suta';
-    final senderAddress = profile.address.isNotEmpty ? profile.address : '553, Park Avenue, East Side New York';
+    final senderName = profile.businessName.isNotEmpty ? profile.businessName : 'My Business';
+    final senderAddress = profile.address.isNotEmpty ? profile.address : '';
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FA),
@@ -66,12 +96,12 @@ class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
           children: [
             // ── Top Header Bar ──
             Padding(
-              padding: const EdgeInsets.fromLTRB(20.0, 14.0, 20.0, 10.0),
+              padding: const EdgeInsets.fromLTRB(20.0, 14.0, 20.0, 6.0),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   GestureDetector(
-                    onTap: () => context.pop(),
+                    onTap: () => context.canPop() ? context.pop() : context.go('/dashboard'),
                     child: Container(
                       width: 44,
                       height: 44,
@@ -99,72 +129,373 @@ class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
                       letterSpacing: -0.3,
                     ),
                   ),
-                  GestureDetector(
-                    onTap: () {
-                      PaymentQrSheet.show(
-                        context,
-                        profile: profile,
-                        invoice: currentInvoice,
-                      );
-                    },
-                    child: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+                  Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () => _handleDuplicateInvoice(currentInvoice),
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+                          ),
+                          child: const Icon(Icons.copy_rounded, size: 18, color: Color(0xFF0F172A)),
+                        ),
                       ),
-                      child: const Icon(Icons.qr_code_2_rounded, size: 20, color: Color(0xFF0F172A)),
-                    ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () {
+                          PaymentQrSheet.show(
+                            context,
+                            profile: profile,
+                            invoice: currentInvoice,
+                          );
+                        },
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+                          ),
+                          child: const Icon(Icons.qr_code_2_rounded, size: 20, color: Color(0xFF0F172A)),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
 
-            Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            // ── Segmented View Switcher (Summary vs PDF Preview) ──
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 6.0),
+              child: Container(
+                height: 40,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE2E8F0).withValues(alpha: 0.6),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                padding: const EdgeInsets.all(3),
+                child: Row(
                   children: [
-                    // ── Invoice ID & Status Pill ──
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Text(
-                          'INV-#${currentInvoice.invoiceNumber}',
-                          style: const TextStyle(
-                            fontSize: 26,
-                            fontWeight: FontWeight.w900,
-                            color: Color(0xFF0F172A),
-                            letterSpacing: -0.6,
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          setState(() => _selectedViewTab = 0);
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
                           decoration: BoxDecoration(
-                            color: isPaid ? const Color(0xFFECFDF5) : const Color(0xFFF8FAFC),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: isPaid ? const Color(0xFF10B981).withValues(alpha: 0.3) : const Color(0xFFE2E8F0),
-                            ),
+                            color: _selectedViewTab == 0 ? Colors.white : Colors.transparent,
+                            borderRadius: BorderRadius.circular(17),
+                            boxShadow: _selectedViewTab == 0
+                                ? [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.04),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 1),
+                                    ),
+                                  ]
+                                : null,
                           ),
-                          child: Text(
-                            isPaid ? 'Paid' : 'Unpaid',
-                            style: TextStyle(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w800,
-                              color: isPaid ? const Color(0xFF10B981) : const Color(0xFF64748B),
+                          child: Center(
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.dashboard_outlined,
+                                  size: 15,
+                                  color: _selectedViewTab == 0 ? const Color(0xFF0F172A) : const Color(0xFF64748B),
+                                ),
+                                const SizedBox(width: 5),
+                                Text(
+                                  'Summary',
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: _selectedViewTab == 0 ? FontWeight.w800 : FontWeight.w600,
+                                    color: _selectedViewTab == 0 ? const Color(0xFF0F172A) : const Color(0xFF64748B),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
-                      ],
+                      ),
+                    ),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          setState(() => _selectedViewTab = 1);
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          decoration: BoxDecoration(
+                            color: _selectedViewTab == 1 ? Colors.white : Colors.transparent,
+                            borderRadius: BorderRadius.circular(17),
+                            boxShadow: _selectedViewTab == 1
+                                ? [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.04),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 1),
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          child: Center(
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.picture_as_pdf_outlined,
+                                  size: 15,
+                                  color: _selectedViewTab == 1 ? const Color(0xFFFF5722) : const Color(0xFF64748B),
+                                ),
+                                const SizedBox(width: 5),
+                                Text(
+                                  'PDF Preview',
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: _selectedViewTab == 1 ? FontWeight.w800 : FontWeight.w600,
+                                    color: _selectedViewTab == 1 ? const Color(0xFFFF5722) : const Color(0xFF64748B),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            if (_selectedViewTab == 1)
+              Expanded(
+                child: Column(
+                  children: [
+                    // Template Selector Bar
+                    Container(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        physics: const BouncingScrollPhysics(),
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Row(
+                          children: [
+                            ...PdfService.availableTemplates.map((template) {
+                              final isSelected = activeTemplateId == template.id;
+                              final color = Color(int.parse(template.primaryColorHex.replaceFirst('#', '0xFF')));
+
+                              return GestureDetector(
+                                onTap: () {
+                                  HapticFeedback.selectionClick();
+                                  setState(() => _selectedTemplateId = template.id);
+                                },
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 180),
+                                  margin: const EdgeInsets.only(right: 8),
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                                  decoration: BoxDecoration(
+                                    color: isSelected ? Colors.white : const Color(0xFFF1F5F9),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: isSelected ? color : const Color(0xFFE2E8F0),
+                                      width: isSelected ? 1.6 : 1.0,
+                                    ),
+                                    boxShadow: isSelected
+                                        ? [
+                                            BoxShadow(
+                                              color: color.withValues(alpha: 0.15),
+                                              blurRadius: 8,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                          ]
+                                        : null,
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(template.icon, style: const TextStyle(fontSize: 13)),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        template.name,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                                          color: isSelected ? color : const Color(0xFF64748B),
+                                        ),
+                                      ),
+                                      if (profile.invoiceTemplate == template.id) ...[
+                                        const SizedBox(width: 4),
+                                        Container(
+                                          width: 5,
+                                          height: 5,
+                                          decoration: BoxDecoration(
+                                            color: color,
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }),
+                            if (profile.invoiceTemplate != activeTemplateId)
+                              GestureDetector(
+                                onTap: () => _handleSetDefaultTemplate(activeTemplateId),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: const Color(0xFFCBD5E1)),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.star_rounded, size: 14, color: Color(0xFFF59E0B)),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'Set Default',
+                                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            GestureDetector(
+                              onTap: () async {
+                                final result = await context.push('/templates');
+                                if (result is String) {
+                                  setState(() => _selectedTemplateId = result);
+                                }
+                              },
+                              child: Container(
+                                margin: const EdgeInsets.only(left: 4),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF0F172A),
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.1),
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.view_carousel_rounded, size: 14, color: Colors.white),
+                                    SizedBox(width: 5),
+                                    Text(
+                                      'Studio',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w800,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
 
-                    const SizedBox(height: 18),
+                    // PDF Preview Viewer with Key
+                    Expanded(
+                      child: PdfPreview(
+                        key: ValueKey('pdf_$activeTemplateId'),
+                        build: (format) => PdfService.generateInvoicePdf(
+                          currentInvoice,
+                          profile,
+                          templateId: activeTemplateId,
+                        ),
+                        allowPrinting: false,
+                        allowSharing: false,
+                        canChangeOrientation: false,
+                        canChangePageFormat: false,
+                        canDebug: false,
+                        scrollViewDecoration: const BoxDecoration(color: Colors.transparent),
+                        pdfFileName: 'Invoice-${currentInvoice.invoiceNumber}.pdf',
+                        loadingWidget: const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                          child: SingleChildScrollView(
+                            physics: NeverScrollableScrollPhysics(),
+                            child: PdfShimmerSkeleton(),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              Expanded(
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // ── Invoice ID & Status Pill ──
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              currentInvoice.invoiceNumber.startsWith('INV-')
+                                  ? currentInvoice.invoiceNumber
+                                  : (currentInvoice.invoiceNumber.startsWith('#')
+                                      ? 'INV-${currentInvoice.invoiceNumber}'
+                                      : 'INV-#${currentInvoice.invoiceNumber}'),
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF0F172A),
+                                letterSpacing: -0.6,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          StatusBadge(
+                            status: currentInvoice.status,
+                            dueDate: currentInvoice.dueDate,
+                            fontSize: 13,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                            onTap: () {
+                              final willBePaid = !currentInvoice.isPaid;
+                              ref.read(invoiceProvider.notifier).togglePaymentStatus(currentInvoice.id);
+                              if (willBePaid) {
+                                CelebrationSparkle.show(
+                                  context,
+                                  message: 'Invoice #${currentInvoice.invoiceNumber} Paid! 🎉',
+                                );
+                              } else {
+                                HapticFeedback.mediumImpact();
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 18),
 
                     // ── Issued on & Due on Row ──
                     Row(
@@ -446,15 +777,20 @@ class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
                 children: [
                   // Download invoice button
                   Expanded(
-                    child: SizedBox(
-                      height: 52,
-                      child: OutlinedButton(
-                        onPressed: () => PdfService.printInvoice(currentInvoice, profile),
-                        style: OutlinedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          side: const BorderSide(color: Color(0xFFE2E8F0)),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+                    child: BouncingButton(
+                      onTap: () => PdfService.printInvoice(
+                        currentInvoice,
+                        profile,
+                        templateId: activeTemplateId,
+                      ),
+                      child: Container(
+                        height: 52,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(26),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
                         ),
+                        alignment: Alignment.center,
                         child: const Text(
                           'Download invoice',
                           style: TextStyle(
@@ -468,23 +804,35 @@ class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
                   ),
                   const SizedBox(width: 12),
 
-                  // Share invoice Lime button
+                  // Share invoice Orange button
                   Expanded(
-                    child: SizedBox(
-                      height: 52,
-                      child: ElevatedButton(
-                        onPressed: () => ShareInvoiceBottomSheet.show(context, invoice: currentInvoice, profile: profile),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF9BD71B),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
-                          elevation: 0,
+                    child: BouncingButton(
+                      onTap: () => ShareInvoiceBottomSheet.show(
+                        context,
+                        invoice: currentInvoice,
+                        profile: profile,
+                        templateId: activeTemplateId,
+                      ),
+                      child: Container(
+                        height: 52,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF5722),
+                          borderRadius: BorderRadius.circular(26),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFFF5722).withValues(alpha: 0.35),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
                         ),
+                        alignment: Alignment.center,
                         child: const Text(
                           'Share invoice',
                           style: TextStyle(
                             fontSize: 14.5,
                             fontWeight: FontWeight.w900,
-                            color: Color(0xFF0F172A),
+                            color: Colors.white,
                           ),
                         ),
                       ),
@@ -507,5 +855,60 @@ class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
         Text(value, style: const TextStyle(fontSize: 13.5, color: Color(0xFF0F172A), fontWeight: FontWeight.w700)),
       ],
     );
+  }
+
+  Future<void> _handleDuplicateInvoice(Invoice invoice) async {
+    HapticFeedback.lightImpact();
+    final shouldDuplicate = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Row(
+          children: [
+            Icon(Icons.content_copy_rounded, color: Color(0xFFFF5722), size: 22),
+            SizedBox(width: 10),
+            Text('Duplicate Invoice', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+          ],
+        ),
+        content: Text(
+          'Create a duplicate copy of INV-#${invoice.invoiceNumber} for "${invoice.client.name}" with a fresh invoice number and today\'s date?',
+          style: const TextStyle(color: Color(0xFF64748B), fontSize: 14, height: 1.4),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF5722),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              elevation: 0,
+            ),
+            child: const Text('Duplicate', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldDuplicate == true && mounted) {
+      HapticFeedback.mediumImpact();
+      final duplicatedInvoice = await ref.read(invoiceProvider.notifier).duplicateAsNewInvoice(invoice);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Duplicated as INV-#${duplicatedInvoice.invoiceNumber}'),
+            backgroundColor: const Color(0xFF0F172A),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        context.pushReplacement('/preview', extra: duplicatedInvoice);
+      }
+    }
   }
 }

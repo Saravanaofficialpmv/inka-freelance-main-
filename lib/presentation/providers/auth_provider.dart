@@ -18,6 +18,9 @@ import 'profile_provider.dart';
 import 'client_provider.dart';
 import 'product_provider.dart';
 import '../viewmodels/invoice_viewmodel.dart';
+import '../viewmodels/expense_viewmodel.dart';
+import '../viewmodels/time_tracker_viewmodel.dart';
+import '../viewmodels/project_viewmodel.dart';
 
 final authProvider = StateNotifierProvider<AuthNotifier, AsyncValue<User?>>((ref) {
   final firestoreService = ref.watch(firestoreServiceProvider);
@@ -56,6 +59,9 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
     _ref.read(clientsProvider.notifier).refreshFromLocal();
     _ref.read(productsProvider.notifier).refreshFromLocal();
     _ref.read(invoiceProvider.notifier).refreshFromLocal();
+    _ref.read(expenseProvider.notifier).refreshFromLocal();
+    _ref.read(timeEntriesProvider.notifier).refreshFromLocal();
+    _ref.read(projectProvider.notifier).refreshFromLocal();
   }
 
   Future<void> signIn(String email, String password) async {
@@ -187,6 +193,9 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
       _ref.read(clientsProvider.notifier).clear();
       _ref.read(productsProvider.notifier).clear();
       _ref.read(invoiceProvider.notifier).clear();
+      _ref.read(expenseProvider.notifier).clear();
+      _ref.read(projectProvider.notifier).clear();
+      _ref.read(timeEntriesProvider.notifier).clear();
       state = const AsyncValue.data(null);
     } catch (e, st) {
       final userFriendlyError = ErrorHandler.getErrorMessage(e);
@@ -336,10 +345,24 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
     _ref.read(invoiceProvider.notifier).refreshFromLocal();
   }
 
+  DateTime? _lastPasswordResetRequest;
+  static const Duration _passwordResetCooldown = Duration(seconds: 60);
+
   Future<void> resetPassword(String email) async {
+    final now = DateTime.now();
+    if (_lastPasswordResetRequest != null) {
+      final elapsed = now.difference(_lastPasswordResetRequest!);
+      if (elapsed < _passwordResetCooldown) {
+        final remaining = _passwordResetCooldown.inSeconds - elapsed.inSeconds;
+        throw 'Please wait $remaining seconds before requesting another password reset.';
+      }
+    }
+
     try {
       await _auth.sendPasswordResetEmail(email: email);
+      _lastPasswordResetRequest = now;
     } catch (e, st) {
+      if (e is String) rethrow;
       final userFriendlyError = ErrorHandler.getErrorMessage(e);
       state = AsyncValue.error(userFriendlyError, st);
       rethrow;

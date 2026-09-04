@@ -9,6 +9,7 @@ import '../../data/models/invoice.dart';
 import '../../services/currency_tax_service.dart';
 import '../../services/payment_qr_service.dart';
 import '../viewmodels/invoice_viewmodel.dart';
+import 'celebration_sparkle.dart';
 
 class PaymentQrSheet extends ConsumerStatefulWidget {
   final BusinessProfile profile;
@@ -84,7 +85,10 @@ class _PaymentQrSheetState extends ConsumerState<PaymentQrSheet> with SingleTick
         _isPaymentDone = true;
       });
       _animController.forward(from: 0.0);
-      HapticFeedback.heavyImpact();
+      CelebrationSparkle.show(
+        context,
+        message: 'Payment Recorded! 🎉',
+      );
     }
   }
 

@@ -62,6 +62,10 @@ class CurrencyTaxService {
     );
   }
 
+  static String getCurrencySymbol(String? currencyCode) {
+    return findCurrency(currencyCode ?? 'USD').symbol;
+  }
+
   static NumberFormat getCurrencyFormatter({String? currencyCode, int? decimalDigits}) {
     final cur = findCurrency(currencyCode ?? 'USD');
     return NumberFormat.currency(

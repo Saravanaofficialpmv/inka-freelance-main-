@@ -7,6 +7,9 @@ import '../providers/product_provider.dart';
 import '../providers/profile_provider.dart';
 import '../../core/localization/app_localizations.dart';
 import '../../services/currency_tax_service.dart';
+import '../widgets/tibsy_refresh_icon.dart';
+import '../widgets/app_search_bar.dart';
+import '../../core/utils/validators.dart';
 
 class ProductsScreen extends ConsumerStatefulWidget {
   final bool isSelectionMode;
@@ -47,7 +50,7 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   GestureDetector(
-                    onTap: () => context.pop(),
+                    onTap: () => context.canPop() ? context.pop() : context.go('/dashboard'),
                     child: Container(
                       width: 44,
                       height: 44,
@@ -80,27 +83,27 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
                   ),
                   GestureDetector(
                     onTap: () => _showProductDialog(context, null),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFFF5722), Color(0xFFFF7A50)],
-                        ),
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFFFF5722).withValues(alpha: 0.35),
-                            blurRadius: 10,
-                            offset: const Offset(0, 3),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFFFF5722), Color(0xFFFF7A50)],
+                            ),
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFFF5722).withValues(alpha: 0.35),
+                                blurRadius: 10,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
                           ),
-                        ],
+                          child: Text(
+                            AppLocalizations.of(context)?.translate('add_item') ?? 'Add Item',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                        ),
                       ),
-                      child: Text(
-                        AppLocalizations.of(context)?.translate('add_item') ?? 'Add Item',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -108,44 +111,11 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
             // ── Search Bar ──
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 6.0),
-              child: Container(
-                height: 48,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.03),
-                      blurRadius: 10,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 20),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: TextField(
-                        controller: _searchController,
-                        onChanged: (value) => ref.read(productSearchQueryProvider.notifier).state = value,
-                        style: const TextStyle(color: Color(0xFF0F172A), fontSize: 14),
-                        decoration: InputDecoration(
-                          hintText: AppLocalizations.of(context)?.translate('search') ?? 'Search items & services...',
-                          hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          contentPadding: EdgeInsets.zero,
-                          isDense: true,
-                          filled: false,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+              child: AppSearchBar(
+                controller: _searchController,
+                hintText: AppLocalizations.of(context)?.translate('search') ?? 'Search items & services...',
+                onChanged: (value) => ref.read(productSearchQueryProvider.notifier).state = value,
+                onClear: () => ref.read(productSearchQueryProvider.notifier).state = '',
               ),
             ),
 
@@ -167,39 +137,42 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
 
             // ── Products List ──
             Expanded(
-              child: products.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
-                          Icon(Icons.inventory_2_outlined, size: 56, color: Color(0xFFCBD5E1)),
-                          SizedBox(height: 14),
-                          Text('No products found', style: TextStyle(color: Color(0xFF64748B))),
-                        ],
+              child: TibsyPullToRefresh(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+                onRefresh: () => syncAndRefreshEntireApp(ref),
+                child: products.isEmpty
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 48),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: const [
+                              Icon(Icons.inventory_2_outlined, size: 56, color: Color(0xFFCBD5E1)),
+                              SizedBox(height: 14),
+                              Text('No products found', style: TextStyle(color: Color(0xFF64748B))),
+                            ],
+                          ),
+                        ),
+                      )
+                    : Column(
+                        children: products.map((product) {
+                          return _ProductListItem(
+                            product: product,
+                            currencyFormat: currencyFormat,
+                            isSelectionMode: widget.isSelectionMode,
+                            onEdit: () => _showProductDialog(context, product),
+                            onDelete: () => _deleteProduct(context, product.id),
+                            onTap: () {
+                              if (widget.isSelectionMode) {
+                                context.pop(product);
+                              } else {
+                                _showProductDialog(context, product);
+                              }
+                            },
+                          );
+                        }).toList(),
                       ),
-                    )
-                  : ListView.builder(
-                      physics: const BouncingScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
-                      itemCount: products.length,
-                      itemBuilder: (context, index) {
-                        final product = products[index];
-                        return _ProductListItem(
-                          product: product,
-                          currencyFormat: currencyFormat,
-                          isSelectionMode: widget.isSelectionMode,
-                          onEdit: () => _showProductDialog(context, product),
-                          onDelete: () => _deleteProduct(context, product.id),
-                          onTap: () {
-                            if (widget.isSelectionMode) {
-                              context.pop(product);
-                            } else {
-                              _showProductDialog(context, product);
-                            }
-                          },
-                        );
-                      },
-                    ),
+              ),
             ),
           ],
         ),
@@ -286,16 +259,22 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
                 height: 54,
                 child: ElevatedButton(
                   onPressed: () async {
-                    if (nameController.text.isEmpty || priceController.text.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please fill name and price')));
+                    final name = nameController.text.trim();
+                    if (name.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Product / Service name is required')));
+                      return;
+                    }
+                    final priceErr = AppValidators.validatePrice(priceController.text, 'Price');
+                    if (priceErr != null) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(priceErr)));
                       return;
                     }
                     final newProduct = Product(
                       id: product?.id ?? '',
-                      name: nameController.text,
-                      defaultPrice: double.tryParse(priceController.text) ?? 0.0,
-                      description: descController.text,
-                      category: categoryController.text,
+                      name: name,
+                      defaultPrice: double.parse(priceController.text.trim()),
+                      description: descController.text.trim(),
+                      category: categoryController.text.trim(),
                     );
                     if (product == null) {
                       await ref.read(productsProvider.notifier).addProduct(newProduct);

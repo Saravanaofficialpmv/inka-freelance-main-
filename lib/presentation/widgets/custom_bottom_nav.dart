@@ -1,4 +1,6 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 class CustomBottomNav extends StatelessWidget {
@@ -7,105 +9,173 @@ class CustomBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+    final bottomMargin = bottomInset > 0 ? bottomInset + 4 : 16.0;
+
     return Container(
-      margin: const EdgeInsets.fromLTRB(28, 0, 28, 24),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      margin: EdgeInsets.fromLTRB(16, 0, 16, bottomMargin),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(36),
-        border: Border.all(color: const Color(0xFFE5E7EB), width: 1.2),
+        borderRadius: BorderRadius.circular(40),
         boxShadow: [
+          // Ambient deep dark shadow
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
+            color: Colors.black.withValues(alpha: 0.45),
+            blurRadius: 28,
+            offset: const Offset(0, 10),
           ),
+          // Subtle top rim highlight
           BoxShadow(
-            color: const Color(0xFF9BD71B).withValues(alpha: 0.06),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
+            color: Colors.white.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, -1),
           ),
         ],
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Home
-          _NavItem(
-            icon: Icons.home_rounded,
-            isActive: currentIndex == 0,
-            onTap: () => GoRouter.of(context).go('/dashboard'),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(40),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xEB16181D), // Dark slate translucent glass
+              borderRadius: BorderRadius.circular(40),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.18),
+                width: 1.2,
+              ),
+            ),
+            child: Row(
+              children: [
+                // 1. Home
+                Expanded(
+                  child: _NavItem(
+                    iconAsset: 'nav_icons/home-4.png',
+                    label: 'Home',
+                    isActive: currentIndex == 0,
+                    onTap: () => GoRouter.of(context).go('/dashboard'),
+                  ),
+                ),
+
+                // 2. Invoices
+                Expanded(
+                  child: _NavItem(
+                    iconAsset: 'nav_icons/bill.png',
+                    label: 'Invoices',
+                    isActive: currentIndex == 1,
+                    onTap: () => GoRouter.of(context).go('/history'),
+                  ),
+                ),
+
+                // 3. Clients
+                Expanded(
+                  child: _NavItem(
+                    iconAsset: 'nav_icons/rating.png',
+                    label: 'Clients',
+                    isActive: currentIndex == 2,
+                    onTap: () => GoRouter.of(context).go('/clients-tab'),
+                  ),
+                ),
+
+                // 4. Stats / Expenses
+                Expanded(
+                  child: _NavItem(
+                    iconAsset: 'nav_icons/graph.png',
+                    label: 'Stats',
+                    isActive: currentIndex == 3,
+                    onTap: () => GoRouter.of(context).go('/expenses'),
+                  ),
+                ),
+
+                // 5. Settings
+                Expanded(
+                  child: _NavItem(
+                    iconAsset: 'nav_icons/settings.png',
+                    label: 'Settings',
+                    isActive: currentIndex == 4,
+                    onTap: () => GoRouter.of(context).go('/profile'),
+                  ),
+                ),
+              ],
+            ),
           ),
-          // Invoices
-          _NavItem(
-            icon: Icons.description_outlined,
-            isActive: currentIndex == 1,
-            onTap: () => GoRouter.of(context).go('/history'),
-          ),
-          // Clients
-          _NavItem(
-            icon: Icons.people_outline_rounded,
-            isActive: currentIndex == 2,
-            onTap: () => GoRouter.of(context).go('/clients-tab'),
-          ),
-          // Expenses / Wallet
-          _NavItem(
-            icon: Icons.account_balance_wallet_outlined,
-            isActive: currentIndex == 3,
-            onTap: () => GoRouter.of(context).go('/expenses'),
-          ),
-          // Settings (Profile)
-          _NavItem(
-            icon: Icons.settings_outlined,
-            isActive: currentIndex == 4,
-            onTap: () => GoRouter.of(context).go('/profile'),
-          ),
-        ],
+        ),
       ),
     );
   }
 }
 
 class _NavItem extends StatelessWidget {
-  final IconData icon;
+  final String iconAsset;
+  final String label;
   final bool isActive;
   final VoidCallback onTap;
 
   const _NavItem({
-    required this.icon,
+    required this.iconAsset,
+    required this.label,
     required this.isActive,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final itemColor = isActive ? Colors.white : Colors.white.withValues(alpha: 0.65);
+
     return GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        HapticFeedback.lightImpact();
+        onTap();
+      },
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
+        duration: const Duration(milliseconds: 240),
         curve: Curves.easeOutCubic,
-        width: 44,
-        height: 44,
+        padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 4),
         decoration: BoxDecoration(
-          color: isActive ? const Color(0xFF0D3B3E) : Colors.transparent, // Dark Teal active circle from mockup
-          shape: BoxShape.circle,
+          color: isActive ? Colors.white.withValues(alpha: 0.14) : Colors.transparent,
+          borderRadius: BorderRadius.circular(32),
+          border: Border.all(
+            color: isActive ? Colors.white.withValues(alpha: 0.28) : Colors.transparent,
+            width: 1.0,
+          ),
           boxShadow: isActive
               ? [
                   BoxShadow(
-                    color: const Color(0xFF0D3B3E).withValues(alpha: 0.35),
-                    blurRadius: 10,
-                    offset: const Offset(0, 3),
+                    color: Colors.white.withValues(alpha: 0.06),
+                    blurRadius: 6,
+                    offset: const Offset(0, 1),
                   ),
                 ]
               : null,
         ),
-        child: Center(
-          child: Icon(
-            icon,
-            color: isActive ? Colors.white : const Color(0xFF64748B),
-            size: 22,
-          ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Image.asset(
+              iconAsset,
+              width: 21,
+              height: 21,
+              color: itemColor,
+              colorBlendMode: BlendMode.srcIn,
+              semanticLabel: label,
+              filterQuality: FilterQuality.medium,
+            ),
+            const SizedBox(height: 3),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: itemColor,
+                  fontSize: 11,
+                  fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                  letterSpacing: -0.2,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

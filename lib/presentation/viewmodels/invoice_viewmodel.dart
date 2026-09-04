@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../providers/client_provider.dart';
@@ -40,6 +41,7 @@ class InvoiceNotifier extends StateNotifier<List<Invoice>> {
   }
 
   Future<void> togglePaymentStatus(String id) async {
+    HapticFeedback.mediumImpact();
     final invoice = state.firstWhere((inv) => inv.id == id);
     final newStatus = invoice.status == 'paid' ? 'pending' : 'paid';
     await updateInvoice(invoice.copyWith(status: newStatus));

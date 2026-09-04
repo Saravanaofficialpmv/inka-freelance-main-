@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'core/localization/app_localizations.dart';
@@ -35,9 +36,56 @@ import 'presentation/screens/add_edit_project_screen.dart';
 import 'presentation/screens/project_details_screen.dart';
 import 'presentation/screens/client_details_screen.dart';
 import 'presentation/screens/subscription_screen.dart';
+import 'presentation/screens/template_gallery_screen.dart';
+import 'presentation/screens/state_showcase_screen.dart';
+import 'presentation/screens/company_details_screen.dart';
+import 'presentation/screens/bank_details_screen.dart';
+import 'presentation/screens/signature_settings_screen.dart';
+import 'presentation/screens/document_settings_screen.dart';
+import 'presentation/screens/notes_terms_screen.dart';
+import 'presentation/screens/language_settings_screen.dart';
+import 'presentation/screens/help_support_screen.dart';
+import 'presentation/screens/privacy_policy_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Configure custom ErrorWidget builder to prevent stack trace leaks to users
+  ErrorWidget.builder = (FlutterErrorDetails details) {
+    return Material(
+      color: const Color(0xFFF8F9FA),
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(28.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFFFF5722).withValues(alpha: 0.1),
+                ),
+                child: const Icon(Icons.warning_amber_rounded, size: 30, color: Color(0xFFFF5722)),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Something went wrong',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'A display error occurred. Your data remains safe and intact.',
+                style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  };
   
   // 1. Initialize Firebase
   try {
@@ -93,6 +141,19 @@ Future<void> _safeOpenBox<T>(String name) async {
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: '/splash',
+    redirect: (context, state) {
+      final user = FirebaseAuth.instance.currentUser;
+      final location = state.matchedLocation;
+      final isPublicRoute = location == '/splash' ||
+          location == '/onboarding' ||
+          location == '/auth' ||
+          location == '/state-showcase';
+
+      if (user == null && !isPublicRoute) {
+        return '/auth';
+      }
+      return null;
+    },
     routes: [
       GoRoute(path: '/splash', builder: (c, s) => const SplashScreen()),
       GoRoute(path: '/onboarding', builder: (c, s) => const OnboardingScreen()),
@@ -121,7 +182,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/clients-select', builder: (c, s) => const ClientsScreen(isSelectionMode: true)),
       GoRoute(path: '/products', builder: (c, s) => const ProductsScreen()),
       GoRoute(path: '/products-select', builder: (c, s) => const ProductsScreen(isSelectionMode: true)),
-      GoRoute(path: '/expenses', builder: (c, s) => const ExpensesScreen()),
+      GoRoute(path: '/state-showcase', builder: (c, s) => const StateShowcaseScreen()),
       GoRoute(path: '/time-tracker', builder: (c, s) => const TimeTrackerScreen()),
       GoRoute(path: '/projects', builder: (c, s) => const ProjectsScreen()),
       GoRoute(path: '/add-project', builder: (c, s) => const AddEditProjectScreen()),
@@ -129,6 +190,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/project-details', builder: (c, s) => ProjectDetailsScreen(project: s.extra as Project)),
       GoRoute(path: '/client-details', builder: (c, s) => ClientDetailsScreen(client: s.extra as Client)),
       GoRoute(path: '/subscription', builder: (c, s) => const SubscriptionScreen()),
+      GoRoute(path: '/templates', builder: (c, s) => const TemplateGalleryScreen()),
+      GoRoute(path: '/company-details', builder: (c, s) => const CompanyDetailsScreen()),
+      GoRoute(path: '/bank-details', builder: (c, s) => const BankDetailsScreen()),
+      GoRoute(path: '/signatures', builder: (c, s) => const SignatureSettingsScreen()),
+      GoRoute(path: '/document-settings', builder: (c, s) => const DocumentSettingsScreen()),
+      GoRoute(path: '/notes-terms', builder: (c, s) => const NotesTermsScreen()),
+      GoRoute(path: '/language-settings', builder: (c, s) => const LanguageSettingsScreen()),
+      GoRoute(path: '/help-support', builder: (c, s) => const HelpSupportScreen()),
+      GoRoute(path: '/privacy-policy', builder: (c, s) => const PrivacyPolicyScreen()),
     ],
   );
 });
