@@ -22,6 +22,20 @@ class InvoiceItem extends HiveObject {
 
   double get total => quantity * price;
 
+  InvoiceItem copyWith({
+    String? id,
+    String? name,
+    int? quantity,
+    double? price,
+  }) {
+    return InvoiceItem(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      quantity: quantity ?? this.quantity,
+      price: price ?? this.price,
+    );
+  }
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,

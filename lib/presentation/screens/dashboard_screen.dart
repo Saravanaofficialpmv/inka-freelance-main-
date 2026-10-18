@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:firebase_auth/firebase_auth.dart' show User;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +9,8 @@ import 'package:intl/intl.dart';
 import '../providers/auth_provider.dart';
 import '../viewmodels/invoice_viewmodel.dart';
 import '../providers/profile_provider.dart';
+import '../../core/constants/colors.dart';
+import '../../core/theme/theme_helper.dart';
 import '../../services/currency_tax_service.dart';
 import '../../data/models/invoice.dart';
 import '../../data/models/business_profile.dart';
@@ -24,6 +28,25 @@ class DashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+  bool _isGridView = false;
+
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) {
+      return 'Good morning';
+    } else if (hour < 17) {
+      return 'Good afternoon';
+    } else {
+      return 'Good evening';
+    }
+  }
+
+  String _getFirstName(String name) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return 'Freelancer';
+    return trimmed.split(' ').first;
+  }
+
   @override
   Widget build(BuildContext context) {
     final stats = ref.watch(dashboardStatsProvider);
@@ -35,6 +58,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       decimalDigits: 0,
     );
 
+    final user = authState.value;
     final String displayName = profile.businessName.isNotEmpty 
       ? profile.businessName 
       : authState.when(
@@ -55,57 +79,124 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final isGrowthPositive = (stats['isGrowthPositive'] as bool?) ?? true;
 
     final displayInvoices = pendingInvoices.isNotEmpty ? pendingInvoices : invoices.take(4).toList();
+    final isWide = MediaQuery.sizeOf(context).width >= 900;
+
+    if (isWide) {
+      return _buildWebDashboard(context, displayName, invoices, currencyFormat);
+    }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
+      backgroundColor: context.scaffoldBg,
       body: SafeArea(
-        bottom: false,
         child: Column(
           children: [
-            // ── Top Header (Avatar, "Hi, Jamil Suta 👋") ──
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20.0, 12.0, 20.0, 10.0),
-              child: Row(
-                children: [
-                  // User Avatar
-                  GestureDetector(
-                    onTap: () => context.go('/profile'),
-                    child: Container(
-                      width: 46,
-                      height: 46,
+            // ── Top Header ──
+            if (isWide)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24.0, 22.0, 24.0, 14.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Welcome back, $displayName 👋',
+                          style: TextStyle(
+                            color: context.textPrimary,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.4,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "Here's an overview of your invoices and business activity.",
+                          style: TextStyle(
+                            color: context.textSecondary,
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                       decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: const Color(0xFFFFECE8),
-                        border: Border.all(color: const Color(0xFFFF5722).withValues(alpha: 0.3), width: 1.5),
+                        color: context.cardBg,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: context.cardBorder),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.02),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
                       ),
-                      clipBehavior: Clip.antiAlias,
-                      child: _buildAvatar(profile),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.calendar_today_rounded, size: 14, color: context.textSecondary),
+                          const SizedBox(width: 8),
+                          Text(
+                            DateFormat('EEEE, d MMMM').format(DateTime.now()),
+                            style: TextStyle(
+                              color: context.textPrimary,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
+                  ],
+                ),
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20.0, 12.0, 20.0, 10.0),
+                child: Row(
+                  children: [
+                    // User Avatar
+                    GestureDetector(
+                      onTap: () => context.go('/profile'),
+                      child: Container(
+                        width: 46,
+                        height: 46,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: const Color(0xFFFFECE8),
+                          border: Border.all(color: const Color(0xFFFF5722).withValues(alpha: 0.3), width: 1.5),
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: _buildAvatar(profile, user),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
 
-                  // Greeting Text: "Hi, Jamil Suta 👋"
-                  Expanded(
-                    child: Text(
-                      'Hi, $displayName 👋',
-                      style: const TextStyle(
-                        color: Color(0xFF0F172A),
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.3,
+                    // Greeting Text: "Hi, Jamil Suta 👋"
+                    Expanded(
+                      child: Text(
+                        'Hi, $displayName 👋',
+                        style: TextStyle(
+                          color: context.textPrimary,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.3,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
 
             // ── Scrollable Body with Tibsy Pull-to-Refresh ──
             Expanded(
               child: TibsyPullToRefresh(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 140),
+                padding: EdgeInsets.fromLTRB(isWide ? 24 : 20, 8, isWide ? 24 : 20, isWide ? 32 : 140),
                 onRefresh: () => syncAndRefreshEntireApp(ref),
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -118,7 +209,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             // Card 1: Total Revenue
                             Expanded(
                               child: GestureDetector(
-                                onTap: () => context.push('/expenses'),
+                                onTap: () => context.go('/expenses'),
                                 child: Container(
                                   padding: const EdgeInsets.all(16),
                                   decoration: BoxDecoration(
@@ -312,155 +403,272 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             ),
                           ],
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Top Row: "Today's Insight" + 3 Carousel Indicator Bars
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      const Text(
-                                        "Today's Insight",
-                                        style: TextStyle(
-                                          color: Color(0xFF94A3B8),
-                                          fontSize: 12.5,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      Row(
+                        child: isWide
+                            ? Padding(
+                                padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          Container(
-                                            width: 24,
-                                            height: 3.5,
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFFFF5722), // Orange active indicator
-                                              borderRadius: BorderRadius.circular(2),
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Text(
+                                                "Today's Insight",
+                                                style: TextStyle(
+                                                  color: Color(0xFF94A3B8),
+                                                  fontSize: 12.5,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 12),
+                                              Container(
+                                                width: 24,
+                                                height: 3.5,
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFFFF5722),
+                                                  borderRadius: BorderRadius.circular(2),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Container(
+                                                width: 14,
+                                                height: 3.5,
+                                                decoration: BoxDecoration(
+                                                  color: Colors.white.withValues(alpha: 0.2),
+                                                  borderRadius: BorderRadius.circular(2),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 10),
+                                          const Text(
+                                            'Your projected revenue for this month is \$15,200, up 12% from last month',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 15.5,
+                                              fontWeight: FontWeight.w600,
+                                              letterSpacing: -0.2,
                                             ),
                                           ),
-                                          const SizedBox(width: 4),
-                                          Container(
-                                            width: 14,
-                                            height: 3.5,
-                                            decoration: BoxDecoration(
-                                              color: Colors.white.withValues(alpha: 0.2),
-                                              borderRadius: BorderRadius.circular(2),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 4),
-                                          Container(
-                                            width: 14,
-                                            height: 3.5,
-                                            decoration: BoxDecoration(
-                                              color: Colors.white.withValues(alpha: 0.2),
-                                              borderRadius: BorderRadius.circular(2),
+                                          const SizedBox(height: 10),
+                                          GestureDetector(
+                                            onTap: () => context.go('/expenses'),
+                                            child: const Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  'View statistics',
+                                                  style: TextStyle(
+                                                    color: Color(0xFFFF7A50),
+                                                    fontSize: 13,
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                                ),
+                                                SizedBox(width: 4),
+                                                Icon(
+                                                  Icons.chevron_right_rounded,
+                                                  size: 16,
+                                                  color: Color(0xFFFF7A50),
+                                                ),
+                                              ],
                                             ),
                                           ),
                                         ],
                                       ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 14),
-
-                                  // Main Insight Copy
-                                  RichText(
-                                    text: TextSpan(
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 15.5,
-                                        fontWeight: FontWeight.w600,
-                                        height: 1.45,
-                                        letterSpacing: -0.2,
+                                    ),
+                                    const SizedBox(width: 24),
+                                    BouncingButton(
+                                      onTap: () => CreateInvoiceScreen.showAsBottomSheet(context),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                                        decoration: BoxDecoration(
+                                          gradient: const LinearGradient(
+                                            colors: [Color(0xFFFF5722), Color(0xFFFF7A50)],
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                          ),
+                                          borderRadius: BorderRadius.circular(16),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: const Color(0xFFFF5722).withValues(alpha: 0.35),
+                                              blurRadius: 12,
+                                              offset: const Offset(0, 4),
+                                            ),
+                                          ],
+                                        ),
+                                        child: const Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.add_rounded, color: Colors.white, size: 20),
+                                            SizedBox(width: 8),
+                                            Text(
+                                              'Create new invoice',
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 14.5,
+                                                fontWeight: FontWeight.w800,
+                                                letterSpacing: -0.2,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        const TextSpan(text: 'Your projected revenue for this month is '),
-                                        TextSpan(
-                                          text: '\$15,200, up 12%',
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w900,
+                                        // Top Row: "Today's Insight" + 3 Carousel Indicator Bars
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            const Text(
+                                              "Today's Insight",
+                                              style: TextStyle(
+                                                color: Color(0xFF94A3B8),
+                                                fontSize: 12.5,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                            Row(
+                                              children: [
+                                                Container(
+                                                  width: 24,
+                                                  height: 3.5,
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFFFF5722), // Orange active indicator
+                                                    borderRadius: BorderRadius.circular(2),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Container(
+                                                  width: 14,
+                                                  height: 3.5,
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.white.withValues(alpha: 0.2),
+                                                    borderRadius: BorderRadius.circular(2),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Container(
+                                                  width: 14,
+                                                  height: 3.5,
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.white.withValues(alpha: 0.2),
+                                                    borderRadius: BorderRadius.circular(2),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 14),
+
+                                        // Main Insight Copy
+                                        RichText(
+                                          text: TextSpan(
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 15.5,
+                                              fontWeight: FontWeight.w600,
+                                              height: 1.45,
+                                              letterSpacing: -0.2,
+                                            ),
+                                            children: [
+                                              const TextSpan(text: 'Your projected revenue for this month is '),
+                                              const TextSpan(
+                                                text: '\$15,200, up 12%',
+                                                style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.w900,
+                                                ),
+                                              ),
+                                              TextSpan(
+                                                text: ' from last month',
+                                                style: TextStyle(
+                                                  color: Colors.white.withValues(alpha: 0.65),
+                                                  fontWeight: FontWeight.normal,
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                         ),
-                                        TextSpan(
-                                          text: ' from last month',
-                                          style: TextStyle(
-                                            color: Colors.white.withValues(alpha: 0.65),
-                                            fontWeight: FontWeight.normal,
+                                        const SizedBox(height: 14),
+
+                                        // View statistics >
+                                        GestureDetector(
+                                          onTap: () => context.go('/expenses'),
+                                          child: const Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(
+                                                'View statistics',
+                                                style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                              SizedBox(width: 4),
+                                              Icon(
+                                                Icons.chevron_right_rounded,
+                                                size: 16,
+                                                color: Colors.white,
+                                              ),
+                                            ],
                                           ),
                                         ),
                                       ],
                                     ),
                                   ),
-                                  const SizedBox(height: 14),
 
-                                  // View statistics >
-                                  GestureDetector(
-                                    onTap: () => context.go('/expenses'),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(
-                                          'View statistics',
+                                  // Attached Bottom Button ("Create new invoice") in Vibrant Orange with Lime/Teal touches
+                                  BouncingButton(
+                                    onTap: () => CreateInvoiceScreen.showAsBottomSheet(context),
+                                    child: Container(
+                                      width: double.infinity,
+                                      margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+                                      padding: const EdgeInsets.symmetric(vertical: 14),
+                                      decoration: BoxDecoration(
+                                        gradient: const LinearGradient(
+                                          colors: [Color(0xFFFF5722), Color(0xFFFF7A50)], // Vibrant Orange
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                        ),
+                                        borderRadius: BorderRadius.circular(18),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: const Color(0xFFFF5722).withValues(alpha: 0.35),
+                                            blurRadius: 12,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                        ],
+                                      ),
+                                      child: const Center(
+                                        child: Text(
+                                          'Create new invoice',
                                           style: TextStyle(
-                                            color: Colors.white.withValues(alpha: 0.65),
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w600,
+                                            color: Colors.white,
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w800,
+                                            letterSpacing: -0.2,
                                           ),
                                         ),
-                                        const SizedBox(width: 4),
-                                        Icon(
-                                          Icons.chevron_right_rounded,
-                                          size: 16,
-                                          color: Colors.white.withValues(alpha: 0.65),
-                                        ),
-                                      ],
+                                      ),
                                     ),
                                   ),
                                 ],
                               ),
-                            ),
-
-                            // Attached Bottom Button ("Create new invoice") in Vibrant Orange with Lime/Teal touches
-                            BouncingButton(
-                              onTap: () => CreateInvoiceScreen.showAsBottomSheet(context),
-                              child: Container(
-                                width: double.infinity,
-                                margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    colors: [Color(0xFFFF5722), Color(0xFFFF7A50)], // Vibrant Orange
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                  ),
-                                  borderRadius: BorderRadius.circular(18),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: const Color(0xFFFF5722).withValues(alpha: 0.35),
-                                      blurRadius: 12,
-                                      offset: const Offset(0, 4),
-                                    ),
-                                  ],
-                                ),
-                                child: const Center(
-                                  child: Text(
-                                    'Create new invoice',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: -0.2,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
                       ),
 
                       const SizedBox(height: 24),
@@ -532,15 +740,44 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  Widget _buildAvatar(BusinessProfile profile) {
-    if (profile.logoUrl != null && profile.logoUrl!.isNotEmpty) {
-      try {
-        final file = File(profile.logoUrl!);
-        if (file.existsSync()) {
-          return Image.file(file, fit: BoxFit.cover, width: 46, height: 46);
-        }
-      } catch (_) {}
+  Widget _buildAvatar(BusinessProfile profile, [User? user]) {
+    final logo = profile.logoUrl?.trim();
+    if (logo != null && logo.isNotEmpty) {
+      if (logo.startsWith('http://') || logo.startsWith('https://')) {
+        return Image.network(
+          logo,
+          fit: BoxFit.cover,
+          width: 46,
+          height: 46,
+          errorBuilder: (context, error, stackTrace) => _buildUserPhotoOrInitial(user, profile),
+        );
+      } else if (!kIsWeb) {
+        try {
+          final file = File(logo);
+          if (file.existsSync()) {
+            return Image.file(file, fit: BoxFit.cover, width: 46, height: 46);
+          }
+        } catch (_) {}
+      }
     }
+    return _buildUserPhotoOrInitial(user, profile);
+  }
+
+  Widget _buildUserPhotoOrInitial(User? user, BusinessProfile profile) {
+    final photo = user?.photoURL?.trim();
+    if (photo != null && photo.isNotEmpty) {
+      return Image.network(
+        photo,
+        fit: BoxFit.cover,
+        width: 46,
+        height: 46,
+        errorBuilder: (context, error, stackTrace) => _buildInitialAvatar(profile),
+      );
+    }
+    return _buildInitialAvatar(profile);
+  }
+
+  Widget _buildInitialAvatar(BusinessProfile profile) {
     final initial = profile.businessName.isNotEmpty ? profile.businessName[0].toUpperCase() : 'I';
     return Center(
       child: Text(
@@ -553,7 +790,892 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       ),
     );
   }
+
+  // ─────────────────────────────────────────────────────────────
+  // ── MIRO-INSPIRED DESKTOP WEB DASHBOARD ──────────────────────
+  // ─────────────────────────────────────────────────────────────
+
+  Widget _buildWebDashboard(
+    BuildContext context,
+    String displayName,
+    List<Invoice> invoices,
+    NumberFormat currencyFormat,
+  ) {
+    return Scaffold(
+      backgroundColor: context.scaffoldBg,
+      body: SingleChildScrollView(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1120),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── 1. Editorial Hero Greeting ──
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(40, 36, 40, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${_getGreeting()}, ${_getFirstName(displayName)}',
+                        style: TextStyle(
+                          fontFamily: 'SpaceGrotesk',
+                          fontSize: 34,
+                          fontWeight: FontWeight.w700,
+                          color: context.textPrimary,
+                          letterSpacing: -0.6,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Welcome to your invoicing workspace. Start a new invoice or jump back to recent activity.',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w400,
+                          color: context.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // ── 2. "Start something new" Section ──
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 40),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Start something new',
+                              style: TextStyle(
+                                fontFamily: 'SpaceGrotesk',
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            SizedBox(height: 3),
+                            Text(
+                              'Create a blank invoice or choose from pre-built professional templates',
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      ElevatedButton.icon(
+                        onPressed: () => CreateInvoiceScreen.showAsBottomSheet(context),
+                        icon: const Icon(Icons.add_rounded, size: 16, color: Colors.white),
+                        label: const Text(
+                          'Create',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                          elevation: 0,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 14),
+
+                // Horizontal Card Deck
+                SizedBox(
+                  height: 185,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 40),
+                    children: [
+                      // Card 1: Blank invoice
+                      InkWell(
+                        onTap: () => CreateInvoiceScreen.showAsBottomSheet(context),
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          width: 170,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF9FAFB),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: AppColors.border, width: 1.2),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  color: AppColors.iconBg,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.primary.withValues(alpha: 0.08),
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(Icons.add_rounded, size: 24, color: AppColors.primary),
+                              ),
+                              const SizedBox(height: 12),
+                              const Text(
+                                'Blank invoice',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13.5,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              const Text(
+                                'Start from scratch',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(width: 14),
+
+                      // Card 2: Standard Invoice (Inka Orange)
+                      _buildTemplateCard(
+                        context: context,
+                        title: 'Standard Invoice',
+                        subtitle: 'Quick & itemized',
+                        tag: 'Popular',
+                        accentColor: AppColors.primary,
+                        previewTotal: 3500.0,
+                        currencyFormat: currencyFormat,
+                      ),
+
+                      const SizedBox(width: 14),
+
+                      // Card 3: Consulting
+                      _buildTemplateCard(
+                        context: context,
+                        title: 'Consulting Invoice',
+                        subtitle: 'Hourly & retainers',
+                        tag: 'Hourly',
+                        accentColor: const Color(0xFF2563EB),
+                        previewTotal: 4500.0,
+                        currencyFormat: currencyFormat,
+                      ),
+
+                      const SizedBox(width: 14),
+
+                      // Card 4: Design & Creative
+                      _buildTemplateCard(
+                        context: context,
+                        title: 'Design & Creative',
+                        subtitle: 'Deliverable milestones',
+                        tag: 'Milestone',
+                        accentColor: const Color(0xFF8B5CF6),
+                        previewTotal: 2800.0,
+                        currencyFormat: currencyFormat,
+                      ),
+
+                      const SizedBox(width: 14),
+
+                      // Card 5: Software Dev
+                      _buildTemplateCard(
+                        context: context,
+                        title: 'Software Dev',
+                        subtitle: 'Sprint & tech consulting',
+                        tag: 'Sprint',
+                        accentColor: const Color(0xFF10B981),
+                        previewTotal: 8200.0,
+                        currencyFormat: currencyFormat,
+                      ),
+
+                      const SizedBox(width: 14),
+
+                      // Card 6: Tax Compliant
+                      _buildTemplateCard(
+                        context: context,
+                        title: 'Tax Compliant',
+                        subtitle: 'Itemized with tax totals',
+                        tag: 'GST / VAT',
+                        accentColor: AppColors.accentOrange,
+                        previewTotal: 950.0,
+                        currencyFormat: currencyFormat,
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 36),
+
+                // ── 3. "Jump back to recents" Section ──
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 40),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Jump back to recents',
+                              style: TextStyle(
+                                fontFamily: 'SpaceGrotesk',
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            SizedBox(height: 3),
+                            Text(
+                              'Recently edited and issued invoices',
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF3F4F6),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.border, width: 0.8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _buildViewToggleButton(
+                              icon: Icons.view_headline_rounded,
+                              tooltip: 'List view',
+                              isSelected: !_isGridView,
+                              onTap: () => setState(() => _isGridView = false),
+                            ),
+                            _buildViewToggleButton(
+                              icon: Icons.grid_view_rounded,
+                              tooltip: 'Grid view',
+                              isSelected: _isGridView,
+                              onTap: () => setState(() => _isGridView = true),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 14),
+
+                // Invoices Table, Grid or Empty State
+                if (invoices.isEmpty)
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+                    padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.border),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.02),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Column(
+                        children: [
+                          Container(
+                            width: 56,
+                            height: 56,
+                            decoration: BoxDecoration(
+                              color: AppColors.iconBg,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                            ),
+                            child: const Icon(Icons.receipt_long_outlined, size: 28, color: AppColors.primary),
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'No invoices created yet',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          const Text(
+                            'Pick a template above or create your first invoice to get started.',
+                            style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                          ),
+                          const SizedBox(height: 20),
+                          ElevatedButton.icon(
+                            onPressed: () => CreateInvoiceScreen.showAsBottomSheet(context),
+                            icon: const Icon(Icons.add_rounded, size: 16, color: Colors.white),
+                            label: const Text(
+                              'Create First Invoice',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              elevation: 0,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else if (!_isGridView)
+                  // Table / List View
+                  Container(
+                    margin: const EdgeInsets.fromLTRB(40, 10, 40, 48),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.015),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: Column(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                          color: const Color(0xFFF9FAFB),
+                          child: const Row(
+                            children: [
+                              Expanded(flex: 3, child: Text('NAME / INVOICE #', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF6B7280), letterSpacing: 0.4))),
+                              Expanded(flex: 2, child: Text('CLIENT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF6B7280), letterSpacing: 0.4))),
+                              Expanded(flex: 2, child: Text('STATUS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF6B7280), letterSpacing: 0.4))),
+                              Expanded(flex: 2, child: Text('AMOUNT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF6B7280), letterSpacing: 0.4))),
+                              Expanded(flex: 2, child: Text('DATE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF6B7280), letterSpacing: 0.4))),
+                              SizedBox(width: 80, child: Text('ACTIONS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF6B7280), letterSpacing: 0.4))),
+                            ],
+                          ),
+                        ),
+                        const Divider(height: 1, thickness: 1, color: Color(0xFFF1F3F5)),
+                        ListView.separated(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: invoices.length,
+                          separatorBuilder: (context, index) => const Divider(height: 1, thickness: 1, color: Color(0xFFF1F3F5)),
+                          itemBuilder: (context, index) {
+                            final invoice = invoices[index];
+                            return _buildInvoiceTableRow(context, invoice, currencyFormat);
+                          },
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  // Grid View
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(40, 10, 40, 48),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final crossAxisCount = constraints.maxWidth > 800 ? 3 : 2;
+                        return GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: crossAxisCount,
+                            crossAxisSpacing: 16,
+                            mainAxisSpacing: 16,
+                            childAspectRatio: 1.45,
+                          ),
+                          itemCount: invoices.length,
+                          itemBuilder: (context, index) {
+                            final invoice = invoices[index];
+                            return _buildInvoiceGridCard(context, invoice, currencyFormat);
+                          },
+                        );
+                      },
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildViewToggleButton({
+    required IconData icon,
+    required String tooltip,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: isSelected ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.06),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Icon(
+            icon,
+            size: 18,
+            color: isSelected ? AppColors.primary : AppColors.textSecondary,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTemplateCard({
+    required BuildContext context,
+    required String title,
+    required String subtitle,
+    required String tag,
+    required Color accentColor,
+    required double previewTotal,
+    required NumberFormat currencyFormat,
+  }) {
+    return InkWell(
+      onTap: () => CreateInvoiceScreen.showAsBottomSheet(context),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        width: 175,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top document preview thumbnail
+            Expanded(
+              child: Container(
+                color: const Color(0xFFF9FAFB),
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      height: 4,
+                      width: 32,
+                      decoration: BoxDecoration(
+                        color: accentColor,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      height: 5,
+                      width: 70,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFCBD5E1),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      height: 4,
+                      width: 100,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE2E8F0),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Container(
+                      height: 4,
+                      width: 80,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE2E8F0),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const Spacer(),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Flexible(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: accentColor.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              tag,
+                              style: TextStyle(
+                                fontSize: 9.0,
+                                fontWeight: FontWeight.w700,
+                                color: accentColor,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          currencyFormat.format(previewTotal),
+                          style: const TextStyle(
+                            fontSize: 10.0,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF4B5563),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const Divider(height: 1, thickness: 1, color: Color(0xFFF1F3F5)),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 10.5,
+                      color: AppColors.textSecondary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInvoiceTableRow(BuildContext context, Invoice invoice, NumberFormat currencyFormat) {
+    return InkWell(
+      onTap: () => context.push('/preview', extra: invoice),
+      hoverColor: const Color(0xFFF9FAFB),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        child: Row(
+          children: [
+            // Name / Invoice #
+            Expanded(
+              flex: 3,
+              child: Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: AppColors.iconBg,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Center(
+                      child: Icon(Icons.description_outlined, size: 18, color: AppColors.primary),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '#${invoice.invoiceNumber}',
+                          style: const TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (invoice.notes.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            invoice.notes,
+                            style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Client
+            Expanded(
+              flex: 2,
+              child: Text(
+                invoice.client.name.isNotEmpty ? invoice.client.name : 'No client',
+                style: const TextStyle(fontSize: 13, color: AppColors.textPrimary, fontWeight: FontWeight.w500),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            // Status
+            Expanded(
+              flex: 2,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: _buildWebStatusPill(invoice.status),
+              ),
+            ),
+            // Amount
+            Expanded(
+              flex: 2,
+              child: Text(
+                currencyFormat.format(invoice.total),
+                style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+              ),
+            ),
+            // Date
+            Expanded(
+              flex: 2,
+              child: Text(
+                DateFormat('MMM d, yyyy').format(invoice.issueDate),
+                style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
+              ),
+            ),
+            // Actions
+            SizedBox(
+              width: 80,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.visibility_outlined, size: 18, color: AppColors.textSecondary),
+                    tooltip: 'Preview',
+                    splashRadius: 16,
+                    onPressed: () => context.push('/preview', extra: invoice),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.textSecondary),
+                    tooltip: 'Edit',
+                    splashRadius: 16,
+                    onPressed: () => CreateInvoiceScreen.showAsBottomSheet(context, invoiceToEdit: invoice),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInvoiceGridCard(BuildContext context, Invoice invoice, NumberFormat currencyFormat) {
+    return InkWell(
+      onTap: () => context.push('/preview', extra: invoice),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top Accent Header
+            Container(
+              height: 48,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              color: const Color(0xFFF9FAFB),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.receipt_outlined, size: 16, color: AppColors.primary),
+                      const SizedBox(width: 6),
+                      Text(
+                        '#${invoice.invoiceNumber}',
+                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.textPrimary),
+                      ),
+                    ],
+                  ),
+                  _buildWebStatusPill(invoice.status),
+                ],
+              ),
+            ),
+            const Divider(height: 1, thickness: 1, color: Color(0xFFF1F3F5)),
+            // Body
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          invoice.client.name.isNotEmpty ? invoice.client.name : 'No client',
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          DateFormat('MMM d, yyyy').format(invoice.issueDate),
+                          style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          currencyFormat.format(invoice.total),
+                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.textPrimary),
+                        ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.edit_outlined, size: 16, color: AppColors.textSecondary),
+                              onPressed: () => CreateInvoiceScreen.showAsBottomSheet(context, invoiceToEdit: invoice),
+                              constraints: const BoxConstraints(),
+                              padding: const EdgeInsets.all(6),
+                              splashRadius: 14,
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.primary),
+                              onPressed: () => context.push('/preview', extra: invoice),
+                              constraints: const BoxConstraints(),
+                              padding: const EdgeInsets.all(6),
+                              splashRadius: 14,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWebStatusPill(String status) {
+    Color bg;
+    Color fg;
+    String label;
+    switch (status.toLowerCase()) {
+      case 'paid':
+        bg = AppColors.successBg;
+        fg = AppColors.success;
+        label = 'Paid';
+        break;
+      case 'overdue':
+        bg = AppColors.errorBg;
+        fg = AppColors.error;
+        label = 'Overdue';
+        break;
+      case 'pending':
+      default:
+        bg = AppColors.warningBg;
+        fg = AppColors.warning;
+        label = 'Pending';
+        break;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: fg),
+      ),
+    );
+  }
 }
+
 
 // ── Formatted Amount with .00 Decimals ──
 class _FormattedAmountText extends StatelessWidget {

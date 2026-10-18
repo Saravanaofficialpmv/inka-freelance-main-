@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import '../../core/utils/navigation_utils.dart';
 import '../../data/models/client.dart';
 import '../../data/models/project.dart';
 import '../providers/client_provider.dart';
@@ -148,7 +148,7 @@ class _AddEditProjectScreenState extends ConsumerState<AddEditProjectScreen> {
       );
     }
 
-    context.pop();
+    safeNavigateBack(context, fallbackRoute: '/projects');
   }
 
   @override
@@ -169,7 +169,7 @@ class _AddEditProjectScreenState extends ConsumerState<AddEditProjectScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   GestureDetector(
-                    onTap: () => context.pop(),
+                    onTap: () => safeNavigateBack(context, fallbackRoute: '/projects'),
                     child: Container(
                       width: 44,
                       height: 44,

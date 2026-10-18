@@ -47,6 +47,7 @@ class _ShareInvoiceBottomSheetState extends State<ShareInvoiceBottomSheet> {
   late WhatsAppTemplateType _selectedTemplate;
   late TextEditingController _messageController;
   bool _isSending = false;
+  bool _isSharingPdf = false;
 
   @override
   void initState() {
@@ -177,6 +178,35 @@ class _ShareInvoiceBottomSheetState extends State<ShareInvoiceBottomSheet> {
     );
   }
 
+  Future<void> _handleSharePdf() async {
+    if (_isSharingPdf) return;
+    setState(() => _isSharingPdf = true);
+    HapticFeedback.lightImpact();
+
+    try {
+      await PdfService.shareInvoice(
+        widget.invoice,
+        widget.profile,
+        templateId: widget.templateId,
+      );
+      if (mounted) {
+        setState(() => _isSharingPdf = false);
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSharingPdf = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to share PDF: $e'),
+            backgroundColor: const Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final clientPhone = widget.invoice.client.phone;
@@ -264,10 +294,8 @@ class _ShareInvoiceBottomSheetState extends State<ShareInvoiceBottomSheet> {
                     label: 'Share PDF File',
                     color: const Color(0xFFF8FAFC),
                     textColor: const Color(0xFFFF5722),
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      PdfService.shareInvoice(widget.invoice, widget.profile, templateId: widget.templateId);
-                    },
+                    isLoading: _isSharingPdf,
+                    onTap: _isSharingPdf ? null : _handleSharePdf,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -550,7 +578,8 @@ class _ActionPill extends StatelessWidget {
   final String label;
   final Color color;
   final Color textColor;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final bool isLoading;
 
   const _ActionPill({
     required this.icon,
@@ -558,13 +587,15 @@ class _ActionPill extends StatelessWidget {
     required this.color,
     required this.textColor,
     required this.onTap,
+    this.isLoading = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return BouncingButton(
-      onTap: onTap,
-      child: Container(
+      onTap: isLoading ? null : onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
           color: color,
           borderRadius: BorderRadius.circular(14),
@@ -574,10 +605,20 @@ class _ActionPill extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 16, color: textColor),
+            if (isLoading)
+              SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(textColor),
+                ),
+              )
+            else
+              Icon(icon, size: 16, color: textColor),
             const SizedBox(width: 6),
             Text(
-              label,
+              isLoading ? 'Preparing...' : label,
               style: TextStyle(
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,

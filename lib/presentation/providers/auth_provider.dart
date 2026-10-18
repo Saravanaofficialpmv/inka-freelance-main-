@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive/hive.dart';
 import '../../core/utils/error_handler.dart';
@@ -14,6 +15,9 @@ import '../../data/models/client.dart';
 import '../../data/models/product.dart';
 import '../../data/models/invoice.dart';
 import '../../data/models/invoice_item.dart';
+import '../../data/models/expense.dart';
+import '../../data/models/time_entry.dart';
+import '../../data/models/project.dart';
 import 'profile_provider.dart';
 import 'client_provider.dart';
 import 'product_provider.dart';
@@ -37,6 +41,8 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   StreamSubscription<User?>? _authSubscription;
+  bool _isSyncing = false;
+  String? _lastSyncedUid;
 
   void _init() {
     final currentUser = _auth.currentUser;
@@ -47,21 +53,28 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
 
     _authSubscription = _auth.authStateChanges().listen((user) {
       state = AsyncValue.data(user);
-      if (user != null) {
+      if (user != null && user.uid != _lastSyncedUid) {
         _syncAndRefresh(user.uid);
       }
     });
   }
 
   Future<void> _syncAndRefresh(String uid) async {
-    await _firestoreService.syncAllData(uid);
-    _ref.read(profileProvider.notifier).loadFromLocal();
-    _ref.read(clientsProvider.notifier).refreshFromLocal();
-    _ref.read(productsProvider.notifier).refreshFromLocal();
-    _ref.read(invoiceProvider.notifier).refreshFromLocal();
-    _ref.read(expenseProvider.notifier).refreshFromLocal();
-    _ref.read(timeEntriesProvider.notifier).refreshFromLocal();
-    _ref.read(projectProvider.notifier).refreshFromLocal();
+    if (_isSyncing) return;
+    _isSyncing = true;
+    _lastSyncedUid = uid;
+    try {
+      await _firestoreService.syncAllData(uid);
+      _ref.read(profileProvider.notifier).loadFromLocal();
+      _ref.read(clientsProvider.notifier).refreshFromLocal();
+      _ref.read(productsProvider.notifier).refreshFromLocal();
+      _ref.read(invoiceProvider.notifier).refreshFromLocal();
+      _ref.read(expenseProvider.notifier).refreshFromLocal();
+      _ref.read(timeEntriesProvider.notifier).refreshFromLocal();
+      _ref.read(projectProvider.notifier).refreshFromLocal();
+    } finally {
+      _isSyncing = false;
+    }
   }
 
   Future<void> signIn(String email, String password) async {
@@ -73,7 +86,7 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
       );
       state = AsyncValue.data(credential.user);
       if (credential.user != null) {
-        await _syncAndRefresh(credential.user!.uid);
+        unawaited(_syncAndRefresh(credential.user!.uid));
       }
     } catch (e, st) {
       final userFriendlyError = ErrorHandler.getErrorMessage(e);
@@ -91,7 +104,7 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
       );
       state = AsyncValue.data(credential.user);
       if (credential.user != null) {
-        await _syncAndRefresh(credential.user!.uid);
+        unawaited(_syncAndRefresh(credential.user!.uid));
       }
     } catch (e, st) {
       final userFriendlyError = ErrorHandler.getErrorMessage(e);
@@ -103,33 +116,47 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
   Future<void> signInWithGoogle() async {
     state = const AsyncValue.loading();
     try {
-      final GoogleSignIn googleSignIn = GoogleSignIn(
-        scopes: ['email', 'profile'],
-      );
+      UserCredential userCredential;
+      if (kIsWeb) {
+        final GoogleAuthProvider googleProvider = GoogleAuthProvider();
+        googleProvider.addScope('email');
+        googleProvider.addScope('profile');
+        try {
+          userCredential = await _auth.signInWithPopup(googleProvider);
+        } on FirebaseAuthException catch (e) {
+          if (e.code == 'popup-closed-by-user' || e.code == 'cancelled-popup-request') {
+            state = AsyncValue.data(_auth.currentUser);
+            return;
+          }
+          rethrow;
+        }
+      } else {
+        final GoogleSignIn googleSignIn = GoogleSignIn(
+          serverClientId: '605207323939-afos8vflkq6evad2img0b9cpcupk6lhe.apps.googleusercontent.com',
+          scopes: ['email', 'profile'],
+        );
 
-      try {
-        await googleSignIn.signOut();
-      } catch (_) {}
+        final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
 
-      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+        if (googleUser == null) {
+          // User cancelled the sign-in dialog
+          state = AsyncValue.data(_auth.currentUser);
+          return;
+        }
 
-      if (googleUser == null) {
-        // User cancelled the sign-in dialog
-        state = AsyncValue.data(_auth.currentUser);
-        return;
+        final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+        final OAuthCredential credential = GoogleAuthProvider.credential(
+          accessToken: googleAuth.accessToken,
+          idToken: googleAuth.idToken,
+        );
+
+        userCredential = await _auth.signInWithCredential(credential);
       }
 
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-      final OAuthCredential credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-
-      final userCredential = await _auth.signInWithCredential(credential);
       state = AsyncValue.data(userCredential.user);
 
       if (userCredential.user != null) {
-        await _syncAndRefresh(userCredential.user!.uid);
+        unawaited(_syncAndRefresh(userCredential.user!.uid));
       }
     } catch (e, st) {
       final userFriendlyError = ErrorHandler.getErrorMessage(e);
@@ -161,7 +188,7 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
       state = AsyncValue.data(userCredential.user);
 
       if (userCredential.user != null) {
-        await _syncAndRefresh(userCredential.user!.uid);
+        unawaited(_syncAndRefresh(userCredential.user!.uid));
       }
     } catch (e, st) {
       final userFriendlyError = ErrorHandler.getErrorMessage(e);
@@ -184,9 +211,11 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
 
   Future<void> signOut() async {
     try {
-      final GoogleSignIn googleSignIn = GoogleSignIn();
-      if (await googleSignIn.isSignedIn()) {
-        await googleSignIn.signOut();
+      if (!kIsWeb) {
+        final GoogleSignIn googleSignIn = GoogleSignIn();
+        if (await googleSignIn.isSignedIn()) {
+          await googleSignIn.signOut();
+        }
       }
       await _auth.signOut();
       _ref.read(profileProvider.notifier).clear();
@@ -196,10 +225,80 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
       _ref.read(expenseProvider.notifier).clear();
       _ref.read(projectProvider.notifier).clear();
       _ref.read(timeEntriesProvider.notifier).clear();
+      _lastSyncedUid = null;
       state = const AsyncValue.data(null);
     } catch (e, st) {
       final userFriendlyError = ErrorHandler.getErrorMessage(e);
       state = AsyncValue.error(userFriendlyError, st);
+    }
+  }
+
+  /// Permanently deletes the user's account from Firebase Auth, wipes all their
+  /// Firestore data across all collections, and clears all local device Hive boxes.
+  Future<void> deleteAccount() async {
+    state = const AsyncValue.loading();
+    try {
+      final user = _auth.currentUser;
+      if (user != null) {
+        final uid = user.uid;
+        // 1. Permanently wipe all Firestore documents & subcollections for this user
+        await _firestoreService.deleteUserData(uid);
+
+        // 2. Permanently delete user from Firebase Auth
+        try {
+          await user.delete();
+        } on FirebaseAuthException catch (e) {
+          debugPrint('Firebase delete user exception: ${e.code}');
+          if (e.code == 'requires-recent-login') {
+            await signOut();
+            rethrow;
+          }
+        }
+      }
+
+      // 3. Clear all local Hive boxes to guarantee zero residual data on device
+      try {
+        if (Hive.isBoxOpen('invoices')) await Hive.box<Invoice>('invoices').clear();
+        if (Hive.isBoxOpen('clients')) await Hive.box<Client>('clients').clear();
+        if (Hive.isBoxOpen('products')) await Hive.box<Product>('products').clear();
+        if (Hive.isBoxOpen('expenses')) await Hive.box<Expense>('expenses').clear();
+        if (Hive.isBoxOpen('time_entries')) await Hive.box<TimeEntry>('time_entries').clear();
+        if (Hive.isBoxOpen('projects')) await Hive.box<Project>('projects').clear();
+        if (Hive.isBoxOpen('business_profile')) await Hive.box<BusinessProfile>('business_profile').clear();
+        if (Hive.isBoxOpen('subscription_prefs')) await Hive.box('subscription_prefs').clear();
+      } catch (e) {
+        debugPrint('Error clearing Hive boxes on deleteAccount: $e');
+      }
+
+      // 4. Reset Riverpod states
+      _ref.read(profileProvider.notifier).clear();
+      _ref.read(clientsProvider.notifier).clear();
+      _ref.read(productsProvider.notifier).clear();
+      _ref.read(invoiceProvider.notifier).clear();
+      _ref.read(expenseProvider.notifier).clear();
+      _ref.read(projectProvider.notifier).clear();
+      _ref.read(timeEntriesProvider.notifier).clear();
+
+      // 5. Sign out Google & Firebase
+      if (!kIsWeb) {
+        try {
+          final GoogleSignIn googleSignIn = GoogleSignIn();
+          if (await googleSignIn.isSignedIn()) {
+            await googleSignIn.signOut();
+          }
+        } catch (_) {}
+      }
+
+      try {
+        await _auth.signOut();
+      } catch (_) {}
+
+      _lastSyncedUid = null;
+      state = const AsyncValue.data(null);
+    } catch (e, st) {
+      final userFriendlyError = ErrorHandler.getErrorMessage(e);
+      state = AsyncValue.error(userFriendlyError, st);
+      rethrow;
     }
   }
 

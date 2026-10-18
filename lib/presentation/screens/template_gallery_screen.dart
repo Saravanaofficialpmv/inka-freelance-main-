@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/utils/navigation_utils.dart';
 import '../../services/pdf_service.dart';
 import '../providers/profile_provider.dart';
 import '../widgets/bouncing_button.dart';
@@ -69,7 +70,7 @@ class _TemplateGalleryScreenState extends ConsumerState<TemplateGalleryScreen> {
       message: '$templateName set as default for ${typeName}s! 🎉',
     );
 
-    Navigator.pop(context, _selectedTemplateId);
+    safeNavigateBack(context, fallbackRoute: '/profile', result: _selectedTemplateId);
   }
 
   void _showZoomPreview(BuildContext context, PdfTemplateOption template) {
@@ -131,7 +132,7 @@ class _TemplateGalleryScreenState extends ConsumerState<TemplateGalleryScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => safeNavigateBack(context, fallbackRoute: '/profile'),
         ),
         title: const Text(
           'Templates',

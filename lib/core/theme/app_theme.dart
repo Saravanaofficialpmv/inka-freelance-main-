@@ -3,12 +3,15 @@ import 'package:flutter/services.dart';
 import '../constants/colors.dart';
 
 class AppTheme {
+  static const String fontFamily = 'SpaceGrotesk';
+
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
       primaryColor: AppColors.primary,
       scaffoldBackgroundColor: AppColors.background,
+      fontFamily: fontFamily,
       
       colorScheme: const ColorScheme.light(
         primary: AppColors.primary,
@@ -30,13 +33,13 @@ class AppTheme {
       ),
 
       textTheme: const TextTheme(
-        displayLarge: TextStyle(color: AppColors.textPrimary, fontSize: 32, fontWeight: FontWeight.bold),
-        titleLarge: TextStyle(color: AppColors.textPrimary, fontSize: 22, fontWeight: FontWeight.bold),
-        titleMedium: TextStyle(color: AppColors.textPrimary, fontSize: 18, fontWeight: FontWeight.w700),
-        bodyLarge: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w600),
-        bodyMedium: TextStyle(color: AppColors.textSecondary, fontSize: 14),
-        bodySmall: TextStyle(color: AppColors.textMuted, fontSize: 12),
-        labelSmall: TextStyle(color: AppColors.textSecondary, fontSize: 11, letterSpacing: 0.5),
+        displayLarge: TextStyle(fontFamily: fontFamily, color: AppColors.textPrimary, fontSize: 32, fontWeight: FontWeight.bold),
+        titleLarge: TextStyle(fontFamily: fontFamily, color: AppColors.textPrimary, fontSize: 22, fontWeight: FontWeight.bold),
+        titleMedium: TextStyle(fontFamily: fontFamily, color: AppColors.textPrimary, fontSize: 18, fontWeight: FontWeight.w700),
+        bodyLarge: TextStyle(fontFamily: fontFamily, color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w600),
+        bodyMedium: TextStyle(fontFamily: fontFamily, color: AppColors.textSecondary, fontSize: 14),
+        bodySmall: TextStyle(fontFamily: fontFamily, color: AppColors.textMuted, fontSize: 12),
+        labelSmall: TextStyle(fontFamily: fontFamily, color: AppColors.textSecondary, fontSize: 11, letterSpacing: 0.5),
       ),
 
       iconTheme: const IconThemeData(
@@ -49,7 +52,7 @@ class AppTheme {
         elevation: 0,
         centerTitle: false,
         iconTheme: IconThemeData(color: AppColors.textPrimary),
-        titleTextStyle: TextStyle(color: AppColors.textPrimary, fontSize: 20, fontWeight: FontWeight.bold),
+        titleTextStyle: TextStyle(fontFamily: fontFamily, color: AppColors.textPrimary, fontSize: 20, fontWeight: FontWeight.bold),
         systemOverlayStyle: SystemUiOverlayStyle.dark,
       ),
 
@@ -60,7 +63,7 @@ class AppTheme {
           elevation: 0,
           minimumSize: const Size.fromHeight(56),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          textStyle: const TextStyle(fontFamily: fontFamily, fontWeight: FontWeight.bold, fontSize: 16),
         ),
       ),
 
@@ -106,6 +109,4 @@ class AppTheme {
       ),
     );
   }
-
-  static ThemeData get darkTheme => lightTheme;
 }

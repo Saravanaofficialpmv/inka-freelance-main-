@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../core/constants/colors.dart';
+import '../../core/utils/navigation_utils.dart';
 import '../../core/localization/app_localizations.dart';
 import '../providers/profile_provider.dart';
 
@@ -19,7 +20,6 @@ class _CompanyDetailsScreenState extends ConsumerState<CompanyDetailsScreen> {
   late final TextEditingController _phoneController;
   late final TextEditingController _emailController;
   late final TextEditingController _addressController;
-  late final TextEditingController _gstController;
   String? _selectedLogoPath;
   bool _isSaving = false;
 
@@ -31,7 +31,6 @@ class _CompanyDetailsScreenState extends ConsumerState<CompanyDetailsScreen> {
     _phoneController = TextEditingController(text: profile.phone);
     _emailController = TextEditingController(text: profile.email);
     _addressController = TextEditingController(text: profile.address);
-    _gstController = TextEditingController(text: profile.gstNumber ?? '');
     _selectedLogoPath = profile.logoUrl;
   }
 
@@ -41,7 +40,6 @@ class _CompanyDetailsScreenState extends ConsumerState<CompanyDetailsScreen> {
     _phoneController.dispose();
     _emailController.dispose();
     _addressController.dispose();
-    _gstController.dispose();
     super.dispose();
   }
 
@@ -72,7 +70,7 @@ class _CompanyDetailsScreenState extends ConsumerState<CompanyDetailsScreen> {
         phone: _phoneController.text.trim(),
         email: _emailController.text.trim(),
         address: _addressController.text.trim(),
-        gstNumber: _gstController.text.trim(),
+        gstNumber: currentProfile.gstNumber,
         logoUrl: _selectedLogoPath,
       );
 
@@ -86,7 +84,7 @@ class _CompanyDetailsScreenState extends ConsumerState<CompanyDetailsScreen> {
             behavior: SnackBarBehavior.floating,
           ),
         );
-        Navigator.pop(context);
+        safeNavigateBack(context, fallbackRoute: '/profile');
       }
     } catch (e) {
       if (mounted) {
@@ -112,7 +110,7 @@ class _CompanyDetailsScreenState extends ConsumerState<CompanyDetailsScreen> {
         scrolledUnderElevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary, size: 20),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => safeNavigateBack(context, fallbackRoute: '/profile'),
         ),
         title: Text(
           AppLocalizations.of(context)?.translate('business_settings') ?? 'Company Details',
@@ -286,13 +284,6 @@ class _CompanyDetailsScreenState extends ConsumerState<CompanyDetailsScreen> {
                       icon: Icons.location_on_outlined,
                       maxLines: 3,
                       hint: 'Street, City, State, ZIP code',
-                    ),
-                    const SizedBox(height: 16),
-                    _buildInputField(
-                      label: AppLocalizations.of(context)?.translate('tax_id') ?? 'Tax ID / GSTIN',
-                      controller: _gstController,
-                      icon: Icons.receipt_long_outlined,
-                      hint: 'e.g. GSTIN29ABCDE1234F1Z5',
                     ),
                   ],
                 ),

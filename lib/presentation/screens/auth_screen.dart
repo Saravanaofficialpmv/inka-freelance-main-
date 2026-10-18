@@ -1,6 +1,6 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../providers/auth_provider.dart';
@@ -27,7 +27,6 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   bool _rememberMe = true;
   bool _agreeToTerms = false;
   bool _isLoading = false;
-  String? _errorMessage;
 
   @override
   void initState() {
@@ -44,9 +43,6 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   }
 
   Future<void> _handleAuth() async {
-    setState(() {
-      _errorMessage = null;
-    });
 
     final name = _nameController.text.trim();
     final email = _emailController.text.trim();
@@ -105,51 +101,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _errorMessage = ErrorHandler.getErrorMessage(e);
-        });
-        _showError(_errorMessage!);
-      }
-    }
-  }
-
-  Future<void> _handleDemoLogin() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-
-    try {
-      await ref.read(authProvider.notifier).signInAsDemo();
-      if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Row(
-              children: [
-                Icon(Icons.bolt_rounded, color: Colors.white, size: 20),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Demo Access Active: Inka Design Studio loaded!',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: AppColors.primary,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            margin: const EdgeInsets.all(16),
-          ),
-        );
-        context.go('/dashboard');
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        _showError('Unable to enter demo mode: $e');
+        _showError(ErrorHandler.getErrorMessage(e));
       }
     }
   }
@@ -169,16 +122,20 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   Future<void> _navigateToNextScreen() async {
     var profile = ref.read(profileProvider);
 
-    // If local in-memory profile is empty, check Firestore directly
+    // If local in-memory profile is empty, check Firestore directly with a fast timeout
     if (profile.businessName.isEmpty) {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
         final firestoreService = ref.read(firestoreServiceProvider);
-        final remoteProfile = await firestoreService.getBusinessProfile(userId: user.uid);
-        if (remoteProfile != null && remoteProfile.businessName.isNotEmpty) {
-          await ref.read(profileProvider.notifier).updateProfileLocally(remoteProfile);
-          profile = remoteProfile;
-        }
+        try {
+          final remoteProfile = await firestoreService
+              .getBusinessProfile(userId: user.uid)
+              .timeout(const Duration(milliseconds: 2500), onTimeout: () => null);
+          if (remoteProfile != null && remoteProfile.businessName.isNotEmpty) {
+            await ref.read(profileProvider.notifier).updateProfileLocally(remoteProfile);
+            profile = remoteProfile;
+          }
+        } catch (_) {}
       }
     }
 
@@ -517,67 +474,30 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
               ),
               const SizedBox(height: 28),
 
-              // ── Social Logins Row (Google & Apple) ──
-              Row(
-                children: [
-                  Expanded(
-                    child: _SocialButton(
-                      icon: const _GoogleIcon(),
-                      label: 'Google',
-                      onTap: _isLoading
-                          ? () {}
-                          : () async {
-                              setState(() => _isLoading = true);
-                              try {
-                                await ref.read(authProvider.notifier).signInWithGoogle();
-                                if (mounted) {
-                                  setState(() => _isLoading = false);
-                                  final currentUser = ref.read(authProvider).value;
-                                  if (currentUser != null) {
-                                    await _navigateToNextScreen();
-                                  }
-                                }
-                              } catch (e) {
-                                if (mounted) {
-                                  setState(() => _isLoading = false);
-                                  _showError(ErrorHandler.getErrorMessage(e));
-                                }
-                              }
-                            },
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: _SocialButton(
-                      icon: const Icon(
-                        Icons.apple,
-                        color: Color(0xFF0F172A),
-                        size: 22,
-                      ),
-                      label: 'Apple',
-                      onTap: _isLoading
-                          ? () {}
-                          : () async {
-                              setState(() => _isLoading = true);
-                              try {
-                                await ref.read(authProvider.notifier).signInWithApple();
-                                if (mounted) {
-                                  setState(() => _isLoading = false);
-                                  final currentUser = ref.read(authProvider).value;
-                                  if (currentUser != null) {
-                                    await _navigateToNextScreen();
-                                  }
-                                }
-                              } catch (e) {
-                                if (mounted) {
-                                  setState(() => _isLoading = false);
-                                  _showError(ErrorHandler.getErrorMessage(e));
-                                }
-                              }
-                            },
-                    ),
-                  ),
-                ],
+              // ── Google Sign-In Button (Full Width) ──
+              _SocialButton(
+                icon: const _GoogleIcon(),
+                label: 'Continue with Google',
+                onTap: _isLoading
+                    ? () {}
+                    : () async {
+                        setState(() => _isLoading = true);
+                        try {
+                          await ref.read(authProvider.notifier).signInWithGoogle();
+                          if (mounted) {
+                            setState(() => _isLoading = false);
+                            final currentUser = ref.read(authProvider).value;
+                            if (currentUser != null) {
+                              await _navigateToNextScreen();
+                            }
+                          }
+                        } catch (e) {
+                          if (mounted) {
+                            setState(() => _isLoading = false);
+                            _showError(ErrorHandler.getErrorMessage(e));
+                          }
+                        }
+                      },
               ),
               const SizedBox(height: 24),
 
@@ -622,42 +542,13 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                       const SizedBox(height: 18),
                     ],
 
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Email Address',
-                          style: TextStyle(
-                            color: Color(0xFF0F172A),
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13.5,
-                          ),
-                        ),
-                        GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _nameController.text = 'Demo User';
-                              _emailController.text = 'demo@inkabilling.com';
-                              _passwordController.text = 'DemoPassword123!';
-                            });
-                          },
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: const [
-                              Icon(Icons.auto_fix_high_rounded, size: 13, color: Color(0xFFFF5722)),
-                              SizedBox(width: 4),
-                              Text(
-                                'Fill Demo',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFFFF5722),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                    const Text(
+                      'Email Address',
+                      style: TextStyle(
+                        color: Color(0xFF0F172A),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13.5,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     _ModernInputField(
@@ -845,77 +736,6 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
-
-              // ── Demo Access Instant CTA Button ──
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: OutlinedButton(
-                  onPressed: _isLoading ? null : _handleDemoLogin,
-                  style: OutlinedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: const Color(0xFFFF5722),
-                    side: const BorderSide(color: Color(0xFFE2E8F0), width: 1.2),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(26),
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 24,
-                        height: 24,
-                        decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [Color(0xFFFF5722), Color(0xFFFF7A50)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.bolt_rounded,
-                          color: Colors.white,
-                          size: 15,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      const Flexible(
-                        child: Text(
-                          'Demo Access Login',
-                          style: TextStyle(
-                            fontSize: 14.5,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFFFF5722),
-                            letterSpacing: -0.2,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFECE8),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Text(
-                          'Instant',
-                          style: TextStyle(
-                            fontSize: 9.5,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFFFF5722),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
               const SizedBox(height: 20),
 
               // ── Bottom Toggle: Switch between Sign In / Sign Up ──
@@ -924,7 +744,6 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                   onTap: () {
                     setState(() {
                       isSignUp = !isSignUp;
-                      _errorMessage = null;
                     });
                   },
                   child: Padding(
@@ -1142,12 +961,16 @@ class _SocialButton extends StatelessWidget {
             children: [
               icon,
               const SizedBox(width: 8),
-              Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 14.5,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF0F172A),
+              Flexible(
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF0F172A),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -1166,79 +989,12 @@ class _GoogleIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
+    return SvgPicture.asset(
+      'assets/images/google.svg',
       width: 20,
       height: 20,
-      child: CustomPaint(painter: _GoogleLogoPainter()),
     );
   }
-}
-
-class _GoogleLogoPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final double w = size.width;
-    final double h = size.height;
-    final double cx = w / 2;
-    final double cy = h / 2;
-    final double radius = w * 0.46;
-
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3.2
-      ..strokeCap = StrokeCap.round;
-
-    // Blue section
-    paint.color = const Color(0xFF4285F4);
-    canvas.drawArc(
-      Rect.fromCircle(center: Offset(cx, cy), radius: radius),
-      -math.pi / 4,
-      math.pi / 2,
-      false,
-      paint,
-    );
-
-    // Green section
-    paint.color = const Color(0xFF34A853);
-    canvas.drawArc(
-      Rect.fromCircle(center: Offset(cx, cy), radius: radius),
-      math.pi / 4,
-      math.pi / 2,
-      false,
-      paint,
-    );
-
-    // Yellow section
-    paint.color = const Color(0xFFFBBC05);
-    canvas.drawArc(
-      Rect.fromCircle(center: Offset(cx, cy), radius: radius),
-      3 * math.pi / 4,
-      math.pi / 2,
-      false,
-      paint,
-    );
-
-    // Red section
-    paint.color = const Color(0xFFEA4335);
-    canvas.drawArc(
-      Rect.fromCircle(center: Offset(cx, cy), radius: radius),
-      5 * math.pi / 4,
-      math.pi / 2,
-      false,
-      paint,
-    );
-
-    // Center horizontal blue line
-    final barPaint = Paint()
-      ..color = const Color(0xFF4285F4)
-      ..style = PaintingStyle.fill
-      ..strokeWidth = 3.2
-      ..strokeCap = StrokeCap.round;
-    canvas.drawLine(Offset(cx - 1, cy), Offset(cx + radius + 1, cy), barPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

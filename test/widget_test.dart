@@ -31,7 +31,7 @@ void main() {
     expect(find.textContaining('Everything You Need'), findsOneWidget);
   });
 
-  testWidgets('AuthScreen renders Welcome Back and Demo Access CTA', (WidgetTester tester) async {
+  testWidgets('AuthScreen renders Welcome Back and Social Logins', (WidgetTester tester) async {
     tester.view.physicalSize = const Size(1080, 2400);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.resetPhysicalSize);
@@ -46,10 +46,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Welcome Back'), findsOneWidget);
-    expect(find.text('Demo Access Login'), findsOneWidget);
-    expect(find.text('Google'), findsOneWidget);
-    expect(find.text('Apple'), findsOneWidget);
+    expect(find.text('Continue with Google'), findsOneWidget);
     expect(find.text('Sign In'), findsOneWidget);
-    expect(find.text('Fill Demo'), findsOneWidget);
   });
 }

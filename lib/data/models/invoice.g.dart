@@ -30,13 +30,26 @@ class InvoiceAdapter extends TypeAdapter<Invoice> {
       isRecurring: fields[10] as bool? ?? false,
       recurringInterval: fields[11] as String? ?? 'monthly',
       nextRecurringDate: fields[12] as DateTime?,
+      clientViewedAt: fields[13] as DateTime?,
+      clientViewCount: fields[14] as int? ?? 0,
+      paymentProofRef: fields[15] as String?,
+      paymentProofDate: fields[16] as DateTime?,
+      paymentProofNote: fields[17] as String?,
+      paymentProofStatus: fields[18] as String?,
+      paymentProofImage: fields[19] as String?,
+      milestones: (fields[20] as List?)
+              ?.map((m) => m is Map
+                  ? PaymentMilestone.fromMap(Map<String, dynamic>.from(m))
+                  : (m is PaymentMilestone ? m : PaymentMilestone.fromMap(Map<String, dynamic>.from(m as Map))))
+              .toList() ??
+          const [],
     );
   }
 
   @override
   void write(BinaryWriter writer, Invoice obj) {
     writer
-      ..writeByte(13)
+      ..writeByte(21)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -62,7 +75,23 @@ class InvoiceAdapter extends TypeAdapter<Invoice> {
       ..writeByte(11)
       ..write(obj.recurringInterval)
       ..writeByte(12)
-      ..write(obj.nextRecurringDate);
+      ..write(obj.nextRecurringDate)
+      ..writeByte(13)
+      ..write(obj.clientViewedAt)
+      ..writeByte(14)
+      ..write(obj.clientViewCount)
+      ..writeByte(15)
+      ..write(obj.paymentProofRef)
+      ..writeByte(16)
+      ..write(obj.paymentProofDate)
+      ..writeByte(17)
+      ..write(obj.paymentProofNote)
+      ..writeByte(18)
+      ..write(obj.paymentProofStatus)
+      ..writeByte(19)
+      ..write(obj.paymentProofImage)
+      ..writeByte(20)
+      ..write(obj.milestones.map((m) => m.toMap()).toList());
   }
 
   @override

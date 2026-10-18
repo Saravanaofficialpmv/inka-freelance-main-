@@ -7,6 +7,7 @@ import 'package:inka/presentation/screens/bank_details_screen.dart';
 import 'package:inka/presentation/screens/document_settings_screen.dart';
 import 'package:inka/presentation/screens/notes_terms_screen.dart';
 import 'package:inka/presentation/screens/language_settings_screen.dart';
+import 'package:inka/presentation/screens/currency_settings_screen.dart';
 import 'package:inka/presentation/screens/help_support_screen.dart';
 import 'package:inka/presentation/screens/privacy_policy_screen.dart';
 
@@ -14,6 +15,7 @@ class FakeProfileNotifier extends StateNotifier<BusinessProfile> implements Prof
   FakeProfileNotifier() : super(
     BusinessProfile.empty().copyWith(
       bankName: 'HDFC Bank',
+      branchName: 'Koramangala',
       accountNo: '50100234567890',
       ifscCode: 'HDFC0001234',
       upiId: 'freelancer@upi',
@@ -57,19 +59,67 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Bank & Digital Payments'), findsOneWidget);
+    expect(find.text('Add New bank'), findsOneWidget);
+    expect(find.text('Bank details'), findsOneWidget);
+    expect(find.text('Account information'), findsOneWidget);
+    expect(find.text('UPI details'), findsOneWidget);
+    expect(find.text('Additional options'), findsOneWidget);
     expect(find.text('HDFC Bank'), findsOneWidget);
-    expect(find.text('50100234567890'), findsOneWidget);
-    expect(find.text('freelancer@upi'), findsNWidgets(2)); // in textfield and in preview card
+    expect(find.text('Koramangala'), findsOneWidget);
+    expect(find.text('50100234567890'), findsWidgets);
 
     // Update bank name
     await tester.enterText(find.widgetWithText(TextField, 'HDFC Bank'), 'ICICI Bank');
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Save Changes'));
+    await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
     expect(fakeNotifier.state.bankName, 'ICICI Bank');
+  });
+
+  testWidgets('BankDetailsScreen saves opening balance, notes, and primary toggle', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    final fakeNotifier = FakeProfileNotifier();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          profileProvider.overrideWith((ref) => fakeNotifier),
+        ],
+        child: const MaterialApp(
+          home: BankDetailsScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Verify helper caption
+    expect(
+      find.text('(Swift Code, Beneficiary Name) etc, notes will also be shown along with the bank details'),
+      findsOneWidget,
+    );
+
+    // Verify Set as Primary Account
+    expect(find.text('Set as Primary Account'), findsOneWidget);
+    await tester.ensureVisible(find.byType(Switch));
+    await tester.pumpAndSettle();
+
+    // Toggle switch off
+    await tester.tap(find.byType(Switch));
+    await tester.pumpAndSettle();
+
+    // Verify top play guide icon has been removed
+    expect(find.byIcon(Icons.play_arrow_rounded), findsNothing);
+
+    // Tap Save
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(fakeNotifier.state.isPrimaryAccount, false);
   });
 
   testWidgets('DocumentSettingsScreen renders tax schemes and saves settings', (tester) async {
@@ -95,6 +145,12 @@ void main() {
     expect(find.text('Tax Scheme Presets'), findsOneWidget);
     expect(find.text('GST (18%)'), findsOneWidget);
     expect(find.text('VAT (20%)'), findsOneWidget);
+    expect(find.text('Default Currency'), findsOneWidget);
+    expect(find.text('INR - Indian Rupee (₹)'), findsOneWidget);
+    expect(find.text('Change in Currency Settings page'), findsOneWidget);
+    // Currency switching list is removed from this page
+    expect(find.text('EUR - Euro (€)'), findsNothing);
+    expect(find.text('JPY - Japanese Yen (¥)'), findsNothing);
     expect(find.text('Save Changes'), findsOneWidget);
 
     await tester.tap(find.text('Save Changes'));
@@ -154,6 +210,39 @@ void main() {
     expect(find.text('Tamil'), findsOneWidget);
     expect(find.text('Hindi'), findsOneWidget);
     expect(find.text('Spanish'), findsOneWidget);
+  });
+
+  testWidgets('CurrencySettingsScreen renders top 10 currencies', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    final fakeNotifier = FakeProfileNotifier();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          profileProvider.overrideWith((ref) => fakeNotifier),
+        ],
+        child: const MaterialApp(
+          home: CurrencySettingsScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Currency Settings'), findsOneWidget);
+    expect(find.text('Top 10 Major Currencies'), findsOneWidget);
+    expect(find.text('US Dollar'), findsOneWidget);
+    expect(find.text('Euro'), findsOneWidget);
+    expect(find.text('British Pound'), findsOneWidget);
+    expect(find.text('Indian Rupee'), findsOneWidget);
+    expect(find.text('Japanese Yen'), findsOneWidget);
+    expect(find.text('Canadian Dollar'), findsOneWidget);
+    expect(find.text('Australian Dollar'), findsOneWidget);
+    expect(find.text('Swiss Franc'), findsOneWidget);
+    expect(find.text('Singapore Dollar'), findsOneWidget);
+    expect(find.text('UAE Dirham'), findsOneWidget);
   });
 
   testWidgets('HelpSupportScreen renders support channels and FAQs', (tester) async {

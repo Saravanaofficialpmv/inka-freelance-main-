@@ -10,6 +10,7 @@ import '../../services/currency_tax_service.dart';
 import '../widgets/tibsy_refresh_icon.dart';
 import '../widgets/app_search_bar.dart';
 import '../../core/utils/validators.dart';
+import '../../core/theme/theme_helper.dart';
 
 class ProductsScreen extends ConsumerStatefulWidget {
   final bool isSelectionMode;
@@ -38,58 +39,84 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
       decimalDigits: 0,
     );
 
+    final isWide = MediaQuery.sizeOf(context).width >= 900;
+    final showBackButton = widget.isSelectionMode || (context.canPop() && !isWide);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: context.scaffoldBg,
       body: SafeArea(
+        bottom: false,
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ── Header ──
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 14.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              padding: EdgeInsets.fromLTRB(
+                isWide ? 24.0 : 20.0,
+                isWide ? 20.0 : 12.0,
+                isWide ? 24.0 : 20.0,
+                0,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  GestureDetector(
-                    onTap: () => context.canPop() ? context.pop() : context.go('/dashboard'),
-                    child: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Row(
+                          children: [
+                            if (showBackButton) ...[
+                              GestureDetector(
+                                onTap: () => context.canPop() ? context.pop() : context.go('/dashboard'),
+                                child: Container(
+                                  width: 44,
+                                  height: 44,
+                                  margin: const EdgeInsets.only(right: 12),
+                                  decoration: BoxDecoration(
+                                    color: context.circleBtnBg,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: context.cardBorder, width: 1.2),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(alpha: 0.04),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: context.textPrimary),
+                                ),
+                              ),
+                            ],
+                            Flexible(
+                              child: Text(
+                                AppLocalizations.of(context)?.translate('product_catalog') ?? 'Product Catalog',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.w900,
+                                  color: context.textPrimary,
+                                  letterSpacing: -0.6,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      child: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: Color(0xFF0F172A)),
-                    ),
-                  ),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                      child: Text(
-                        AppLocalizations.of(context)?.translate('product_catalog') ?? 'Product Catalog',
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: () => _showProductDialog(context, null),
+                      GestureDetector(
+                        onTap: () => _showProductDialog(context, null),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          width: 44,
+                          height: 44,
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
                               colors: [Color(0xFFFF5722), Color(0xFFFF7A50)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
                             ),
-                            borderRadius: BorderRadius.circular(20),
+                            shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
                                 color: const Color(0xFFFF5722).withValues(alpha: 0.35),
@@ -98,24 +125,22 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
                               ),
                             ],
                           ),
-                          child: Text(
-                            AppLocalizations.of(context)?.translate('add_item') ?? 'Add Item',
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                          ),
+                          child: const Icon(Icons.add_rounded, size: 24, color: Colors.white),
                         ),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  AppSearchBar(
+                    controller: _searchController,
+                    hintText: AppLocalizations.of(context)?.translate('search') ?? 'Search items & services...',
+                    onChanged: (value) => ref.read(productSearchQueryProvider.notifier).state = value,
+                    onClear: () {
+                      _searchController.clear();
+                      ref.read(productSearchQueryProvider.notifier).state = '';
+                    },
+                  ),
                 ],
-              ),
-            ),
-
-            // ── Search Bar ──
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 6.0),
-              child: AppSearchBar(
-                controller: _searchController,
-                hintText: AppLocalizations.of(context)?.translate('search') ?? 'Search items & services...',
-                onChanged: (value) => ref.read(productSearchQueryProvider.notifier).state = value,
-                onClear: () => ref.read(productSearchQueryProvider.notifier).state = '',
               ),
             ),
 
@@ -123,7 +148,7 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
 
             // Section label
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0),
+              padding: EdgeInsets.symmetric(horizontal: isWide ? 24.0 : 20.0),
               child: Row(
                 children: const [
                   Text(
@@ -138,7 +163,7 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
             // ── Products List ──
             Expanded(
               child: TibsyPullToRefresh(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+                padding: EdgeInsets.fromLTRB(isWide ? 24 : 20, 0, isWide ? 24 : 20, isWide ? 32 : 100),
                 onRefresh: () => syncAndRefreshEntireApp(ref),
                 child: products.isEmpty
                     ? Center(
@@ -325,9 +350,9 @@ class _ProductListItem extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.cardBg,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: context.cardBorder),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
@@ -344,7 +369,7 @@ class _ProductListItem extends StatelessWidget {
               width: 46,
               height: 46,
               decoration: BoxDecoration(
-                color: const Color(0xFFFFECE8),
+                color: context.isDarkMode ? const Color(0xFF332018) : const Color(0xFFFFECE8),
                 shape: BoxShape.circle,
                 border: Border.all(color: const Color(0xFFFF5722).withValues(alpha: 0.25)),
               ),
@@ -357,12 +382,12 @@ class _ProductListItem extends StatelessWidget {
                 children: [
                   Text(
                     product.name,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F172A)),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: context.textPrimary),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     product.category ?? 'General Service',
-                    style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                    style: TextStyle(color: context.textSecondary, fontSize: 12),
                   ),
                 ],
               ),

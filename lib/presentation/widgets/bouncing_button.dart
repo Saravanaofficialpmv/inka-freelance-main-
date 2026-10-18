@@ -76,21 +76,26 @@ class _BouncingButtonState extends State<BouncingButton>
 
   @override
   Widget build(BuildContext context) {
+    final disableAnimations = MediaQuery.of(context).disableAnimations;
+
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTapDown: _onTapDown,
-      onTapUp: _onTapUp,
-      onTapCancel: _onTapCancel,
-      child: AnimatedBuilder(
-        animation: _scaleAnimation,
-        builder: (context, child) {
-          return Transform.scale(
-            scale: _scaleAnimation.value,
-            child: child,
-          );
-        },
-        child: widget.child,
-      ),
+      onTapDown: disableAnimations ? null : _onTapDown,
+      onTapUp: disableAnimations ? null : _onTapUp,
+      onTapCancel: disableAnimations ? null : _onTapCancel,
+      onTap: disableAnimations ? widget.onTap : null,
+      child: disableAnimations
+          ? widget.child
+          : AnimatedBuilder(
+              animation: _scaleAnimation,
+              builder: (context, child) {
+                return Transform.scale(
+                  scale: _scaleAnimation.value,
+                  child: child,
+                );
+              },
+              child: widget.child,
+            ),
     );
   }
 }

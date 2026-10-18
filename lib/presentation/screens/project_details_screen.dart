@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import '../../core/utils/navigation_utils.dart';
 import '../../data/models/project.dart';
 import '../../services/currency_tax_service.dart';
 import '../providers/profile_provider.dart';
@@ -52,7 +53,7 @@ class ProjectDetailsScreen extends ConsumerWidget {
             onPressed: () {
               ref.read(projectProvider.notifier).deleteProject(projectId);
               Navigator.pop(ctx);
-              context.pop();
+              safeNavigateBack(context, fallbackRoute: '/projects');
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFEF4444),
@@ -100,7 +101,7 @@ class ProjectDetailsScreen extends ConsumerWidget {
               child: Row(
                 children: [
                   GestureDetector(
-                    onTap: () => context.pop(),
+                    onTap: () => safeNavigateBack(context, fallbackRoute: '/projects'),
                     child: Container(
                       width: 44,
                       height: 44,

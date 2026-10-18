@@ -343,90 +343,148 @@ class FirestoreService {
       final timeEntriesBox = Hive.box<TimeEntry>('time_entries');
       final projectsBox = Hive.box<Project>('projects');
 
-      // 1. Sync Profile
-      final remoteProfile = await getBusinessProfile(userId: userId);
-      final localProfile = profileBox.get('current');
-      if (remoteProfile != null) {
-        await profileBox.put('current', remoteProfile);
-      } else if (localProfile != null && localProfile.businessName.isNotEmpty) {
-        await saveBusinessProfile(localProfile, userId: userId);
-      }
+      // Run all collection syncs in parallel to minimize latency
+      await Future.wait([
+        // 1. Sync Profile
+        () async {
+          final remoteProfile = await getBusinessProfile(userId: userId);
+          final localProfile = profileBox.get('current');
+          if (remoteProfile != null) {
+            await profileBox.put('current', remoteProfile);
+          } else if (localProfile != null && localProfile.businessName.isNotEmpty) {
+            await saveBusinessProfile(localProfile, userId: userId);
+          }
+        }(),
 
-      // 2. Sync Clients (Bidirectional reconciliation)
-      final remoteClients = await getClients(userId: userId);
-      final remoteClientIds = remoteClients.map((c) => c.id).toSet();
-      for (var c in clientsBox.values) {
-        if (!remoteClientIds.contains(c.id)) {
-          await saveClient(c, userId: userId);
-        }
-      }
-      for (var c in remoteClients) {
-        await clientsBox.put(c.id, c);
-      }
+        // 2. Sync Clients (Bidirectional reconciliation)
+        () async {
+          final remoteClients = await getClients(userId: userId);
+          final remoteClientIds = remoteClients.map((c) => c.id).toSet();
+          for (var c in clientsBox.values) {
+            if (!remoteClientIds.contains(c.id)) {
+              await saveClient(c, userId: userId);
+            }
+          }
+          for (var c in remoteClients) {
+            await clientsBox.put(c.id, c);
+          }
+        }(),
 
-      // 3. Sync Invoices (Bidirectional reconciliation)
-      final remoteInvoices = await getInvoices(userId: userId);
-      final remoteInvoiceIds = remoteInvoices.map((inv) => inv.id).toSet();
-      for (var inv in invoicesBox.values) {
-        if (!remoteInvoiceIds.contains(inv.id)) {
-          await saveInvoice(inv, userId: userId);
-        }
-      }
-      for (var inv in remoteInvoices) {
-        await invoicesBox.put(inv.id, inv);
-      }
+        // 3. Sync Invoices (Bidirectional reconciliation)
+        () async {
+          final remoteInvoices = await getInvoices(userId: userId);
+          final remoteInvoiceIds = remoteInvoices.map((inv) => inv.id).toSet();
+          for (var inv in invoicesBox.values) {
+            if (!remoteInvoiceIds.contains(inv.id)) {
+              await saveInvoice(inv, userId: userId);
+            }
+          }
+          for (var inv in remoteInvoices) {
+            await invoicesBox.put(inv.id, inv);
+          }
+        }(),
 
-      // 4. Sync Products (Bidirectional reconciliation)
-      final remoteProducts = await getProducts(userId: userId);
-      final remoteProductIds = remoteProducts.map((p) => p.id).toSet();
-      for (var p in productsBox.values) {
-        if (!remoteProductIds.contains(p.id)) {
-          await saveProduct(p, userId: userId);
-        }
-      }
-      for (var p in remoteProducts) {
-        await productsBox.put(p.id, p);
-      }
+        // 4. Sync Products (Bidirectional reconciliation)
+        () async {
+          final remoteProducts = await getProducts(userId: userId);
+          final remoteProductIds = remoteProducts.map((p) => p.id).toSet();
+          for (var p in productsBox.values) {
+            if (!remoteProductIds.contains(p.id)) {
+              await saveProduct(p, userId: userId);
+            }
+          }
+          for (var p in remoteProducts) {
+            await productsBox.put(p.id, p);
+          }
+        }(),
 
-      // 5. Sync Expenses (Bidirectional reconciliation)
-      final remoteExpenses = await getExpenses(userId: userId);
-      final remoteExpenseIds = remoteExpenses.map((exp) => exp.id).toSet();
-      for (var exp in expensesBox.values) {
-        if (!remoteExpenseIds.contains(exp.id)) {
-          await saveExpense(exp, userId: userId);
-        }
-      }
-      for (var exp in remoteExpenses) {
-        await expensesBox.put(exp.id, exp);
-      }
+        // 5. Sync Expenses (Bidirectional reconciliation)
+        () async {
+          final remoteExpenses = await getExpenses(userId: userId);
+          final remoteExpenseIds = remoteExpenses.map((exp) => exp.id).toSet();
+          for (var exp in expensesBox.values) {
+            if (!remoteExpenseIds.contains(exp.id)) {
+              await saveExpense(exp, userId: userId);
+            }
+          }
+          for (var exp in remoteExpenses) {
+            await expensesBox.put(exp.id, exp);
+          }
+        }(),
 
-      // 6. Sync Time Entries (Bidirectional reconciliation)
-      final remoteTimeEntries = await getTimeEntries(userId: userId);
-      final remoteTimeEntryIds = remoteTimeEntries.map((te) => te.id).toSet();
-      for (var te in timeEntriesBox.values) {
-        if (!remoteTimeEntryIds.contains(te.id)) {
-          await saveTimeEntry(te, userId: userId);
-        }
-      }
-      for (var te in remoteTimeEntries) {
-        await timeEntriesBox.put(te.id, te);
-      }
+        // 6. Sync Time Entries (Bidirectional reconciliation)
+        () async {
+          final remoteTimeEntries = await getTimeEntries(userId: userId);
+          final remoteTimeEntryIds = remoteTimeEntries.map((te) => te.id).toSet();
+          for (var te in timeEntriesBox.values) {
+            if (!remoteTimeEntryIds.contains(te.id)) {
+              await saveTimeEntry(te, userId: userId);
+            }
+          }
+          for (var te in remoteTimeEntries) {
+            await timeEntriesBox.put(te.id, te);
+          }
+        }(),
 
-      // 7. Sync Projects (Bidirectional reconciliation)
-      final remoteProjects = await getProjects(userId: userId);
-      final remoteProjectIds = remoteProjects.map((proj) => proj.id).toSet();
-      for (var proj in projectsBox.values) {
-        if (!remoteProjectIds.contains(proj.id)) {
-          await saveProject(proj, userId: userId);
-        }
-      }
-      for (var proj in remoteProjects) {
-        await projectsBox.put(proj.id, proj);
-      }
+        // 7. Sync Projects (Bidirectional reconciliation)
+        () async {
+          final remoteProjects = await getProjects(userId: userId);
+          final remoteProjectIds = remoteProjects.map((proj) => proj.id).toSet();
+          for (var proj in projectsBox.values) {
+            if (!remoteProjectIds.contains(proj.id)) {
+              await saveProject(proj, userId: userId);
+            }
+          }
+          for (var proj in remoteProjects) {
+            await projectsBox.put(proj.id, proj);
+          }
+        }(),
+      ]);
 
       debugPrint('Firestore data sync completed for user: $userId');
     } catch (e) {
       debugPrint('Firestore syncAllData error: $e');
     }
   }
+
+  // ==================== ACCOUNT DELETION ====================
+
+  /// Permanently deletes all documents and subcollections belonging to [userId] from Firestore.
+  Future<void> deleteUserData(String userId) async {
+    try {
+      final collections = [
+        _clientsCollection(userId),
+        _invoicesCollection(userId),
+        _productsCollection(userId),
+        _expensesCollection(userId),
+        _timeEntriesCollection(userId),
+        _projectsCollection(userId),
+        _firestore.collection('users').doc(userId).collection('profile'),
+      ];
+
+      for (final col in collections) {
+        try {
+          final snapshot = await col.get();
+          for (final doc in snapshot.docs) {
+            await doc.reference.delete();
+          }
+        } catch (e) {
+          debugPrint('Error deleting subcollection for user $userId: $e');
+        }
+      }
+
+      // Delete root user document if it exists
+      try {
+        await _firestore.collection('users').doc(userId).delete();
+      } catch (e) {
+        debugPrint('Error deleting root user doc for $userId: $e');
+      }
+
+      debugPrint('Firestore deleteUserData completed permanently for user: $userId');
+    } catch (e) {
+      debugPrint('Firestore deleteUserData error: $e');
+      rethrow;
+    }
+  }
 }
+

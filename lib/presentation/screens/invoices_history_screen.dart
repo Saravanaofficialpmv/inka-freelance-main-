@@ -13,7 +13,9 @@ import '../widgets/status_badge.dart';
 import '../widgets/highlighted_text.dart';
 import '../widgets/search_empty_state.dart';
 import '../widgets/celebration_sparkle.dart';
+import '../widgets/sync_status_badge.dart';
 import 'create_invoice_screen.dart';
+import '../../core/theme/theme_helper.dart';
 
 class InvoicesHistoryScreen extends ConsumerStatefulWidget {
   const InvoicesHistoryScreen({super.key});
@@ -39,6 +41,7 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
 
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (ctx) => Container(
@@ -46,7 +49,7 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
           color: Colors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
         ),
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
+        padding: EdgeInsets.fromLTRB(24, 20, 24, MediaQuery.of(ctx).padding.bottom + 24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -169,6 +172,7 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
   Widget build(BuildContext context) {
     final invoices = ref.watch(invoiceProvider);
     final profile = ref.watch(profileProvider);
+    final isWide = MediaQuery.sizeOf(context).width >= 900;
     final currencyFormat = CurrencyTaxService.getCurrencyFormatter(
       currencyCode: profile.currency.isNotEmpty ? profile.currency : 'USD',
       decimalDigits: 2,
@@ -207,7 +211,7 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
     }).toList();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
+      backgroundColor: context.scaffoldBg,
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -223,37 +227,76 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        'My Invoices',
-                        style: TextStyle(
-                          fontSize: 26,
-                          fontWeight: FontWeight.w900,
-                          color: Color(0xFF0F172A),
-                          letterSpacing: -0.6,
+                      Expanded(
+                        child: Row(
+                          children: [
+                            if (Navigator.of(context).canPop())
+                              GestureDetector(
+                                onTap: () => Navigator.of(context).pop(),
+                                child: Container(
+                                  width: 44,
+                                  height: 44,
+                                  margin: const EdgeInsets.only(right: 12),
+                                  decoration: BoxDecoration(
+                                    color: context.circleBtnBg,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: context.cardBorder, width: 1.2),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(alpha: 0.04),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: context.textPrimary),
+                                ),
+                              ),
+                            Flexible(
+                              child: Text(
+                                'My Invoices',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.w900,
+                                  color: context.textPrimary,
+                                  letterSpacing: -0.6,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      GestureDetector(
-                        onTap: () => CreateInvoiceScreen.showAsBottomSheet(context),
-                        child: Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFFFF5722), Color(0xFFFF7A50)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFFFF5722).withValues(alpha: 0.35),
-                                blurRadius: 10,
-                                offset: const Offset(0, 3),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const SyncStatusBadge(),
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: () => CreateInvoiceScreen.showAsBottomSheet(context),
+                            child: Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFFFF5722), Color(0xFFFF7A50)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFFFF5722).withValues(alpha: 0.35),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ],
                               ),
-                            ],
+                              child: const Icon(Icons.add_rounded, size: 24, color: Colors.white),
+                            ),
                           ),
-                          child: const Icon(Icons.add_rounded, size: 24, color: Colors.white),
-                        ),
+                        ],
                       ),
                     ],
                   ),
@@ -276,7 +319,7 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
             // ── Scrollable Body with Tibsy Pull-to-Refresh ──
             Expanded(
               child: TibsyPullToRefresh(
-                padding: const EdgeInsets.fromLTRB(20.0, 0, 20.0, 120.0),
+                padding: EdgeInsets.fromLTRB(20.0, 0, 20.0, isWide ? 32.0 : 120.0),
                 onRefresh: () => syncAndRefreshEntireApp(ref),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -468,7 +511,7 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
               const SizedBox(height: 10),
 
               SizedBox(
-                height: 116,
+                height: 126,
                 child: favoriteClients.isEmpty
                     ? Container(
                         padding: const EdgeInsets.all(16),
@@ -497,9 +540,9 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
                               margin: const EdgeInsets.only(right: 12),
                               padding: const EdgeInsets.all(14),
                               decoration: BoxDecoration(
-                                color: Colors.white,
+                                color: context.cardBg,
                                 borderRadius: BorderRadius.circular(22),
-                                border: Border.all(color: const Color(0xFFE2E8F0)),
+                                border: Border.all(color: context.cardBorder),
                                 boxShadow: [
                                   BoxShadow(
                                     color: Colors.black.withValues(alpha: 0.02),
@@ -516,7 +559,7 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
                                     children: [
                                       CircleAvatar(
                                         radius: 18,
-                                        backgroundColor: const Color(0xFF0F172A),
+                                        backgroundColor: context.isDarkMode ? const Color(0xFF334155) : const Color(0xFF0F172A),
                                         child: Text(
                                           inv.client.name.isNotEmpty ? inv.client.name[0].toUpperCase() : 'C',
                                           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
@@ -525,16 +568,18 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                         decoration: BoxDecoration(
-                                          color: hasUnpaid ? const Color(0xFFFFF1ED) : const Color(0xFFF1F5F9),
+                                          color: hasUnpaid
+                                              ? (context.isDarkMode ? const Color(0xFF332018) : const Color(0xFFFFF1ED))
+                                              : context.surfaceHighlight,
                                           borderRadius: BorderRadius.circular(10),
-                                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                                          border: Border.all(color: context.cardBorder),
                                         ),
                                         child: Text(
                                           hasUnpaid ? 'Unpaid' : 'New',
                                           style: TextStyle(
                                             fontSize: 10.5,
                                             fontWeight: FontWeight.w700,
-                                            color: hasUnpaid ? const Color(0xFFFF5722) : const Color(0xFF64748B),
+                                            color: hasUnpaid ? const Color(0xFFFF5722) : context.textSecondary,
                                           ),
                                         ),
                                       ),
@@ -543,14 +588,14 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
                                   const Spacer(),
                                   Text(
                                     inv.client.name,
-                                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5, color: Color(0xFF0F172A)),
+                                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5, color: context.textPrimary),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
                                     '$clientInvoicesCount Invoices',
-                                    style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+                                    style: TextStyle(fontSize: 11.5, color: context.textSecondary, fontWeight: FontWeight.w500),
                                   ),
                                 ],
                               ),
@@ -634,156 +679,229 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
                             ? 'INV-${inv.invoiceNumber}'
                             : 'INV-#${inv.invoiceNumber}');
 
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.02),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: InkWell(
-                        onTap: () => context.push('/preview', extra: inv),
+                    return Dismissible(
+                      key: ValueKey('invoice_card_${inv.id}'),
+                      background: Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        alignment: Alignment.centerLeft,
                         child: Row(
                           children: [
-                            // Left Icon Box
-                            Container(
-                              width: 42,
-                              height: 42,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF8FAFC),
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(color: const Color(0xFFE2E8F0)),
-                              ),
-                              child: const Icon(Icons.receipt_long_rounded, color: Color(0xFF0F172A), size: 20),
+                            const Icon(Icons.check_circle_rounded, color: Colors.white, size: 22),
+                            const SizedBox(width: 8),
+                            Text(
+                              inv.isPaid ? 'Mark Unpaid' : 'Mark Paid',
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13),
                             ),
-                            const SizedBox(width: 10),
+                          ],
+                        ),
+                      ),
+                      secondaryBackground: Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEF4444),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        alignment: Alignment.centerRight,
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            Text(
+                              'Delete',
+                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13),
+                            ),
+                            SizedBox(width: 8),
+                            Icon(Icons.delete_outline_rounded, color: Colors.white, size: 22),
+                          ],
+                        ),
+                      ),
+                      confirmDismiss: (direction) async {
+                        if (direction == DismissDirection.startToEnd) {
+                          final willBePaid = !inv.isPaid;
+                          await ref.read(invoiceProvider.notifier).togglePaymentStatus(inv.id);
+                          if (context.mounted) {
+                            if (willBePaid) {
+                              CelebrationSparkle.show(
+                                context,
+                                message: '$displayInvNumber Paid! 🎉',
+                              );
+                            } else {
+                              HapticFeedback.mediumImpact();
+                            }
+                          }
+                          return false;
+                        } else {
+                          return await _handleDeleteInvoice(inv, displayInvNumber);
+                        }
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: context.cardBg,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: context.cardBorder),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.02),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: InkWell(
+                          onTap: () => context.push('/preview', extra: inv),
+                          child: Row(
+                            children: [
+                              // Left Icon Box
+                              Container(
+                                width: 42,
+                                height: 42,
+                                decoration: BoxDecoration(
+                                  color: context.surfaceHighlight,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: context.cardBorder),
+                                ),
+                                child: Icon(Icons.receipt_long_rounded, color: context.textPrimary, size: 20),
+                              ),
+                              const SizedBox(width: 10),
 
-                            // Middle Info
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  HighlightedText(
-                                    text: displayInvNumber,
-                                    query: _searchQuery,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 14,
-                                      color: Color(0xFF0F172A),
-                                      letterSpacing: -0.2,
-                                    ),
-                                  ),
-                                  if (inv.client.name.isNotEmpty) ...[
-                                    const SizedBox(height: 1),
+                              // Middle Info
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
                                     HighlightedText(
-                                      text: inv.client.name,
+                                      text: displayInvNumber,
                                       query: _searchQuery,
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                        color: Color(0xFF64748B),
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 14,
+                                        color: context.textPrimary,
+                                        letterSpacing: -0.2,
                                       ),
                                     ),
-                                  ],
-                                  const SizedBox(height: 3),
-                                  Row(
-                                    children: [
-                                      Text(
-                                        currencyFormat.format(inv.total),
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w800,
+                                    if (inv.client.name.isNotEmpty) ...[
+                                      const SizedBox(height: 1),
+                                      HighlightedText(
+                                        text: inv.client.name,
+                                        query: _searchQuery,
+                                        style: TextStyle(
                                           fontSize: 12,
-                                          color: Color(0xFF0F172A),
-                                        ),
-                                      ),
-                                      const Text(' • ', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
-                                      Flexible(
-                                        child: Text(
-                                          'Until ${DateFormat('dd MMM yyyy').format(inv.dueDate)}',
-                                          style: const TextStyle(
-                                            fontSize: 11,
-                                            color: Color(0xFF64748B),
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
+                                          fontWeight: FontWeight.w600,
+                                          color: context.textSecondary,
                                         ),
                                       ),
                                     ],
+                                    const SizedBox(height: 3),
+                                    Row(
+                                      children: [
+                                        Text(
+                                          currencyFormat.format(inv.total),
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 12,
+                                            color: Color(0xFF0F172A),
+                                          ),
+                                        ),
+                                        const Text(' • ', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                                        Flexible(
+                                          child: Text(
+                                            'Until ${DateFormat('dd MMM yyyy').format(inv.dueDate)}',
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              color: Color(0xFF64748B),
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              const SizedBox(width: 8),
+
+                              // Right Status Badge Pill (Interactive)
+                              StatusBadge(
+                                status: inv.status,
+                                dueDate: inv.dueDate,
+                                fontSize: 11.5,
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                onTap: () {
+                                  final willBePaid = !inv.isPaid;
+                                  ref.read(invoiceProvider.notifier).togglePaymentStatus(inv.id);
+                                  if (willBePaid) {
+                                    CelebrationSparkle.show(
+                                      context,
+                                      message: '$displayInvNumber Paid! 🎉',
+                                    );
+                                  } else {
+                                    HapticFeedback.mediumImpact();
+                                  }
+                                },
+                              ),
+
+                              const SizedBox(width: 2),
+
+                              // More Options (Duplicate, View, Delete)
+                              PopupMenuButton<String>(
+                                icon: const Icon(Icons.more_vert_rounded, size: 18, color: Color(0xFF94A3B8)),
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(minWidth: 140),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                onSelected: (action) {
+                                  if (action == 'duplicate') {
+                                    _handleDuplicateInvoice(inv);
+                                  } else if (action == 'preview') {
+                                    context.push('/preview', extra: inv);
+                                  } else if (action == 'delete') {
+                                    _handleDeleteInvoice(inv, displayInvNumber);
+                                  }
+                                },
+                                itemBuilder: (context) => [
+                                  const PopupMenuItem(
+                                    value: 'duplicate',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.content_copy_rounded, size: 15, color: Color(0xFFFF5722)),
+                                        SizedBox(width: 8),
+                                        Text('Duplicate', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
+                                      ],
+                                    ),
+                                  ),
+                                  const PopupMenuItem(
+                                    value: 'preview',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.visibility_rounded, size: 15, color: Color(0xFF64748B)),
+                                        SizedBox(width: 8),
+                                        Text('View', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+                                      ],
+                                    ),
+                                  ),
+                                  const PopupMenuItem(
+                                    value: 'delete',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.delete_outline_rounded, size: 15, color: Color(0xFFEF4444)),
+                                        SizedBox(width: 8),
+                                        Text('Delete', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFFEF4444))),
+                                      ],
+                                    ),
                                   ),
                                 ],
                               ),
-                            ),
-
-                            const SizedBox(width: 8),
-
-                            // Right Status Badge Pill (Interactive)
-                            StatusBadge(
-                              status: inv.status,
-                              dueDate: inv.dueDate,
-                              fontSize: 11.5,
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              onTap: () {
-                                final willBePaid = !inv.isPaid;
-                                ref.read(invoiceProvider.notifier).togglePaymentStatus(inv.id);
-                                if (willBePaid) {
-                                  CelebrationSparkle.show(
-                                    context,
-                                    message: '$displayInvNumber Paid! 🎉',
-                                  );
-                                } else {
-                                  HapticFeedback.mediumImpact();
-                                }
-                              },
-                            ),
-
-                            const SizedBox(width: 2),
-
-                            // More Options (Duplicate, View)
-                            PopupMenuButton<String>(
-                              icon: const Icon(Icons.more_vert_rounded, size: 18, color: Color(0xFF94A3B8)),
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(minWidth: 140),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                              onSelected: (action) {
-                                if (action == 'duplicate') {
-                                  _handleDuplicateInvoice(inv);
-                                } else if (action == 'preview') {
-                                  context.push('/preview', extra: inv);
-                                }
-                              },
-                              itemBuilder: (context) => [
-                                const PopupMenuItem(
-                                  value: 'duplicate',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.content_copy_rounded, size: 15, color: Color(0xFFFF5722)),
-                                      SizedBox(width: 8),
-                                      Text('Duplicate', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
-                                    ],
-                                  ),
-                                ),
-                                const PopupMenuItem(
-                                  value: 'preview',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.visibility_rounded, size: 15, color: Color(0xFF64748B)),
-                                      SizedBox(width: 8),
-                                      Text('View', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     );
@@ -895,5 +1013,69 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
         context.push('/preview', extra: duplicatedInvoice);
       }
     }
+  }
+
+  Future<bool> _handleDeleteInvoice(Invoice invoice, String displayInvNumber) async {
+    HapticFeedback.lightImpact();
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Row(
+          children: [
+            Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 22),
+            SizedBox(width: 10),
+            Text('Delete Invoice', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to delete $displayInvNumber for "${invoice.client.name}"? This action can be undone.',
+          style: const TextStyle(color: Color(0xFF64748B), fontSize: 14, height: 1.4),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              elevation: 0,
+            ),
+            child: const Text('Delete', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldDelete == true && mounted) {
+      HapticFeedback.mediumImpact();
+      final deletedInvoice = invoice;
+      await ref.read(invoiceProvider.notifier).deleteInvoice(invoice.id);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Deleted $displayInvNumber'),
+            backgroundColor: const Color(0xFF0F172A),
+            behavior: SnackBarBehavior.floating,
+            action: SnackBarAction(
+              label: 'Undo',
+              textColor: const Color(0xFFFF5722),
+              onPressed: () {
+                ref.read(invoiceProvider.notifier).addInvoice(deletedInvoice);
+              },
+            ),
+          ),
+        );
+      }
+      return true;
+    }
+    return false;
   }
 }

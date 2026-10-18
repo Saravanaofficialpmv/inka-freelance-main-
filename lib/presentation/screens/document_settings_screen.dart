@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../core/constants/colors.dart';
+import '../../core/utils/navigation_utils.dart';
 import '../../core/localization/app_localizations.dart';
 import '../../services/currency_tax_service.dart';
 import '../providers/profile_provider.dart';
@@ -17,20 +19,7 @@ class _DocumentSettingsScreenState extends ConsumerState<DocumentSettingsScreen>
   late final TextEditingController _taxRateController;
   late final TextEditingController _taxIdController;
   late bool _isTaxInclusive;
-  late String _selectedCurrency;
   bool _isSaving = false;
-
-  static const List<Map<String, String>> _availableCurrencies = [
-    {'code': 'USD', 'symbol': '\$', 'name': 'US Dollar'},
-    {'code': 'INR', 'symbol': '₹', 'name': 'Indian Rupee'},
-    {'code': 'EUR', 'symbol': '€', 'name': 'Euro'},
-    {'code': 'GBP', 'symbol': '£', 'name': 'British Pound'},
-    {'code': 'CAD', 'symbol': 'CA\$', 'name': 'Canadian Dollar'},
-    {'code': 'AUD', 'symbol': 'AU\$', 'name': 'Australian Dollar'},
-    {'code': 'JPY', 'symbol': '¥', 'name': 'Japanese Yen'},
-    {'code': 'AED', 'symbol': 'AED', 'name': 'UAE Dirham'},
-    {'code': 'SGD', 'symbol': 'SG\$', 'name': 'Singapore Dollar'},
-  ];
 
   @override
   void initState() {
@@ -42,7 +31,6 @@ class _DocumentSettingsScreenState extends ConsumerState<DocumentSettingsScreen>
     );
     _taxIdController = TextEditingController(text: profile.gstNumber ?? '');
     _isTaxInclusive = profile.isTaxInclusive;
-    _selectedCurrency = profile.currency.isNotEmpty ? profile.currency : 'USD';
   }
 
   @override
@@ -67,13 +55,12 @@ class _DocumentSettingsScreenState extends ConsumerState<DocumentSettingsScreen>
       final rate = double.tryParse(_taxRateController.text.trim()) ?? 0.0;
       final taxId = _taxIdController.text.trim();
 
-      final profile = ref.read(profileProvider);
-      final updated = profile.copyWith(
+      final currentProfile = ref.read(profileProvider);
+      final updated = currentProfile.copyWith(
         taxLabel: label,
         defaultTaxRate: rate,
         isTaxInclusive: _isTaxInclusive,
         gstNumber: taxId,
-        currency: _selectedCurrency,
       );
 
       await ref.read(profileProvider.notifier).updateProfile(updated);
@@ -81,12 +68,12 @@ class _DocumentSettingsScreenState extends ConsumerState<DocumentSettingsScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Document settings updated ($label $rate% / $_selectedCurrency)!'),
+            content: Text('Document settings updated ($label $rate%)!'),
             backgroundColor: AppColors.success,
             behavior: SnackBarBehavior.floating,
           ),
         );
-        Navigator.pop(context);
+        safeNavigateBack(context, fallbackRoute: '/profile');
       }
     } catch (e) {
       if (mounted) {
@@ -102,6 +89,8 @@ class _DocumentSettingsScreenState extends ConsumerState<DocumentSettingsScreen>
   @override
   Widget build(BuildContext context) {
     final schemes = CurrencyTaxService.commonTaxSchemes;
+    final profile = ref.watch(profileProvider);
+    final activeCurrency = CurrencyTaxService.findCurrency(profile.currency);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -111,7 +100,7 @@ class _DocumentSettingsScreenState extends ConsumerState<DocumentSettingsScreen>
         scrolledUnderElevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary, size: 20),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => safeNavigateBack(context, fallbackRoute: '/profile'),
         ),
         title: const Text(
           'Document Settings',
@@ -261,60 +250,110 @@ class _DocumentSettingsScreenState extends ConsumerState<DocumentSettingsScreen>
 
               const SizedBox(height: 24),
 
-              // ── Currency Selection Card ──
+              // ── Active Selected Currency Card ──
               const Padding(
                 padding: EdgeInsets.only(left: 4, bottom: 8),
                 child: Text(
                   'Default Currency',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textPrimary, letterSpacing: -0.2),
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                    letterSpacing: -0.2,
+                  ),
                 ),
               ),
               Container(
-                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: AppColors.cardBorder),
                   boxShadow: [
-                    BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 2)),
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.02),
+                      blurRadius: 10,
+                      offset: const Offset(0, 2),
+                    ),
                   ],
                 ),
-                child: Column(
-                  children: _availableCurrencies.map((curr) {
-                    final isCurrent = _selectedCurrency == curr['code'];
-                    return ListTile(
-                      dense: true,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-                      leading: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: isCurrent ? AppColors.primary.withValues(alpha: 0.12) : const Color(0xFFF1F5F9),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Center(
-                          child: Text(
-                            curr['symbol']!,
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: isCurrent ? AppColors.primary : AppColors.textPrimary,
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: () => context.push('/currency-settings'),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Center(
+                              child: Text(
+                                activeCurrency.flag,
+                                style: const TextStyle(fontSize: 24),
+                              ),
                             ),
                           ),
-                        ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '${activeCurrency.code} - ${activeCurrency.name} (${activeCurrency.symbol})',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 15,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                const Text(
+                                  'Change in Currency Settings page',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textSecondary,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Change',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                                SizedBox(width: 3),
+                                Icon(
+                                  Icons.arrow_forward_ios_rounded,
+                                  size: 11,
+                                  color: AppColors.primary,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                      title: Text(
-                        '${curr['code']} - ${curr['name']}',
-                        style: TextStyle(
-                          fontWeight: isCurrent ? FontWeight.bold : FontWeight.w600,
-                          fontSize: 14,
-                          color: isCurrent ? AppColors.primary : AppColors.textPrimary,
-                        ),
-                      ),
-                      trailing: isCurrent ? const Icon(Icons.check_circle_rounded, color: AppColors.primary, size: 20) : null,
-                      onTap: () => setState(() => _selectedCurrency = curr['code']!),
-                    );
-                  }).toList(),
+                    ),
+                  ),
                 ),
               ),
             ],

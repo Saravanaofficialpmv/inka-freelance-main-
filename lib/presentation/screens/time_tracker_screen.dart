@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/constants/colors.dart';
+import '../../core/utils/navigation_utils.dart';
 import '../../data/models/client.dart';
 import '../../data/models/project.dart';
 import '../../data/models/time_entry.dart';
@@ -127,7 +128,7 @@ class _TimeTrackerScreenState extends ConsumerState<TimeTrackerScreen> with Sing
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
-          onPressed: () => context.pop(),
+          onPressed: () => safeNavigateBack(context, fallbackRoute: '/dashboard'),
         ),
         title: const Text(
           'Time Tracker',

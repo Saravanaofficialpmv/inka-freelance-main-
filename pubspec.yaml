@@ -61,8 +61,10 @@ dependencies:
   shared_preferences: ^2.2.2
   url_launcher: ^6.3.2
   image_picker: ^1.2.1
+  path_provider: ^2.1.5
   speech_to_text: ^7.3.0
   permission_handler: ^12.0.1
+  flutter_contacts: ^2.1.0
   google_sign_in: ^6.2.2
   sign_in_with_apple: ^8.1.0
   crypto: ^3.0.7
@@ -88,17 +90,17 @@ flutter_launcher_icons:
   remove_alpha_ios: true
   web:
     generate: true
-    image_path: "icon final.png"
+    image_path: "assets/branding/icon_final.png"
     background_color: "#ffffff"
     theme_color: "#ffffff"
   windows:
     generate: true
-    image_path: "icon final.png"
+    image_path: "assets/branding/icon_final.png"
     icon_size: 48
   macos:
     generate: true
-    image_path: "icon final.png"
-  image_path: "icon final.png"
+    image_path: "assets/branding/icon_final.png"
+  image_path: "assets/branding/icon_final.png"
   min_sdk_android: 21 # android min sdk value
 
 # For information on the generic Dart part of this file, see the
@@ -115,11 +117,11 @@ flutter:
   assets:
     - assets/fonts/Inter/
     - assets/fonts/Poppins/
+    - assets/fonts/SpaceGrotesk/
     - assets/images/
-    - 1.jpg
-    - tibsy-dp-3.gif
-    - nav_icons/
-    - profilepage_icon/
+    - assets/icons/nav/
+    - assets/icons/profile/
+    - assets/branding/
     - assets/templates/
 
   # To add assets to your application, add an assets section, like this:
@@ -148,6 +150,16 @@ flutter:
         - asset: assets/fonts/Poppins/Poppins-Regular.ttf
         - asset: assets/fonts/Poppins/Poppins-Medium.ttf
         - asset: assets/fonts/Poppins/Poppins-Bold.ttf
+    - family: SpaceGrotesk
+      fonts:
+        - asset: assets/fonts/SpaceGrotesk/SpaceGrotesk-Light.ttf
+          weight: 300
+        - asset: assets/fonts/SpaceGrotesk/SpaceGrotesk-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/SpaceGrotesk/SpaceGrotesk-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/SpaceGrotesk/SpaceGrotesk-Bold.ttf
+          weight: 700
 
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package

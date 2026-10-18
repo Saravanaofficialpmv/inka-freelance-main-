@@ -59,7 +59,8 @@ void main() {
     expect(find.text('Email Address'), findsOneWidget);
     expect(find.text('Phone Number'), findsOneWidget);
     expect(find.text('Address'), findsOneWidget);
-    expect(find.text('Tax ID / GSTIN'), findsOneWidget);
+    expect(find.text('Tax ID / GSTIN'), findsNothing);
+    expect(find.text('tax_id'), findsNothing);
 
     // Verify Save Button
     expect(find.text('Save Changes'), findsOneWidget);

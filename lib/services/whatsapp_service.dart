@@ -28,6 +28,7 @@ class WhatsAppService {
     final issueFormatted = DateFormat('dd MMM yyyy').format(invoice.issueDate);
     final clientName = invoice.client.name.isNotEmpty ? invoice.client.name : 'Valued Client';
     final businessName = profile.businessName.isNotEmpty ? profile.businessName : 'Our Business';
+    final liveLink = 'https://inka.link/inv/${invoice.id}';
 
     switch (templateType) {
       case WhatsAppTemplateType.newInvoice:
@@ -39,6 +40,7 @@ class WhatsAppService {
             '💰 *Total Amount Due:* *$totalFormatted*\n'
             '${_buildItemsSummary(invoice)}'
             '${_buildPaymentDetails(profile)}'
+            '🔗 *View & Pay Online:* $liveLink\n\n'
             'Please let us know once the payment is completed. Let us know if you have any questions!\n\n'
             'Best regards,\n*$businessName*';
 
@@ -48,6 +50,7 @@ class WhatsAppService {
             '💰 *Amount Due:* *$totalFormatted*\n'
             '⏳ *Due Date:* $dueFormatted\n'
             '${_buildPaymentDetails(profile)}'
+            '🔗 *View & Pay Online:* $liveLink\n\n'
             'If you have already processed this payment, please disregard this note. Thank you!\n\n'
             'Warm regards,\n*$businessName*';
 
@@ -56,6 +59,7 @@ class WhatsAppService {
             'Dear *$clientName*,\n\n'
             'Our records indicate that invoice *#${invoice.invoiceNumber}* for *$totalFormatted* was due on *$dueFormatted* and remains outstanding.\n\n'
             '${_buildPaymentDetails(profile)}'
+            '🔗 *Pay Online Now:* $liveLink\n\n'
             'Kindly settle this invoice at your earliest convenience. If you need any assistance or have already made the transfer, please reply to this message.\n\n'
             'Sincerely,\n*$businessName*';
 
@@ -65,6 +69,7 @@ class WhatsAppService {
             '• *Invoice Total:* *$totalFormatted*\n'
             '• *Due Date:* $dueFormatted\n'
             '${_buildPaymentDetails(profile)}'
+            '🔗 *View Statement Online:* $liveLink\n\n'
             'Kindly ensure payment is remitted by the specified date. Thank you for your continued partnership.\n\n'
             'Sincerely,\n*$businessName*';
 
@@ -74,7 +79,8 @@ class WhatsAppService {
             'We are pleased to confirm receipt of your payment for invoice *#${invoice.invoiceNumber}*.\n\n'
             '💰 *Amount Settled:* *$totalFormatted*\n'
             '📅 *Date:* ${DateFormat('dd MMM yyyy').format(DateTime.now())}\n'
-            '✅ *Status:* Paid in Full\n\n'
+            '✅ *Status:* Paid in Full\n'
+            '🔗 *View Receipt:* $liveLink\n\n'
             'We truly appreciate doing business with you and look forward to collaborating again soon!\n\n'
             'Best regards,\n*$businessName*';
     }

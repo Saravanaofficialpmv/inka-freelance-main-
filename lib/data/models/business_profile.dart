@@ -64,6 +64,15 @@ class BusinessProfile {
   @HiveField(19)
   final String invoiceTemplate; // 'modern', 'classic', 'emerald', 'minimal'
 
+  @HiveField(20)
+  final double? openingBalance;
+
+  @HiveField(21)
+  final String? bankNotes;
+
+  @HiveField(22)
+  final bool isPrimaryAccount;
+
   BusinessProfile({
     required this.businessName,
     required this.address,
@@ -85,6 +94,9 @@ class BusinessProfile {
     this.isTaxInclusive = false,
     this.taxIdNumber,
     this.invoiceTemplate = 'modern',
+    this.openingBalance,
+    this.bankNotes,
+    this.isPrimaryAccount = true,
   });
 
   factory BusinessProfile.empty() {
@@ -108,6 +120,9 @@ class BusinessProfile {
       isTaxInclusive: false,
       taxIdNumber: '',
       invoiceTemplate: 'modern',
+      openingBalance: null,
+      bankNotes: '',
+      isPrimaryAccount: true,
     );
   }
 
@@ -132,6 +147,9 @@ class BusinessProfile {
     bool? isTaxInclusive,
     String? taxIdNumber,
     String? invoiceTemplate,
+    double? openingBalance,
+    String? bankNotes,
+    bool? isPrimaryAccount,
   }) {
     return BusinessProfile(
       businessName: businessName ?? this.businessName,
@@ -154,6 +172,9 @@ class BusinessProfile {
       isTaxInclusive: isTaxInclusive ?? this.isTaxInclusive,
       taxIdNumber: taxIdNumber ?? this.taxIdNumber,
       invoiceTemplate: invoiceTemplate ?? this.invoiceTemplate,
+      openingBalance: openingBalance ?? this.openingBalance,
+      bankNotes: bankNotes ?? this.bankNotes,
+      isPrimaryAccount: isPrimaryAccount ?? this.isPrimaryAccount,
     );
   }
 
@@ -179,6 +200,9 @@ class BusinessProfile {
       'isTaxInclusive': isTaxInclusive,
       'taxIdNumber': taxIdNumber,
       'invoiceTemplate': invoiceTemplate,
+      'openingBalance': openingBalance,
+      'bankNotes': bankNotes,
+      'isPrimaryAccount': isPrimaryAccount,
     };
   }
 
@@ -204,6 +228,9 @@ class BusinessProfile {
       isTaxInclusive: map['isTaxInclusive'] ?? false,
       taxIdNumber: map['taxIdNumber'] ?? map['gstNumber'],
       invoiceTemplate: map['invoiceTemplate'] ?? 'modern',
+      openingBalance: (map['openingBalance'] as num?)?.toDouble(),
+      bankNotes: map['bankNotes'],
+      isPrimaryAccount: map['isPrimaryAccount'] ?? true,
     );
   }
 }

@@ -59,7 +59,9 @@ class StatusBadge extends StatelessWidget {
         break;
     }
 
-    final badge = Container(
+    final badge = AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
       padding: padding,
       decoration: BoxDecoration(
         color: baseColor.withValues(alpha: 0.12),
@@ -76,24 +78,34 @@ class StatusBadge extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          if (showIcon) ...[
-            Icon(icon, size: fontSize + 1.5, color: baseColor),
-            const SizedBox(width: 4.5),
-          ],
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: fontSize,
-              fontWeight: FontWeight.w800,
-              color: baseColor,
-              letterSpacing: -0.2,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 200),
+        transitionBuilder: (child, animation) {
+          return FadeTransition(
+            opacity: animation,
+            child: ScaleTransition(scale: animation, child: child),
+          );
+        },
+        child: Row(
+          key: ValueKey(label),
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            if (showIcon) ...[
+              Icon(icon, size: fontSize + 1.5, color: baseColor),
+              const SizedBox(width: 4.5),
+            ],
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: fontSize,
+                fontWeight: FontWeight.w800,
+                color: baseColor,
+                letterSpacing: -0.2,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
 

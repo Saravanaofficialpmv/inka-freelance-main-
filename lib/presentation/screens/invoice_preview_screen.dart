@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,10 +12,15 @@ import '../../services/pdf_service.dart';
 import 'package:printing/printing.dart';
 import '../widgets/share_invoice_bottom_sheet.dart';
 import '../widgets/payment_qr_sheet.dart';
+import '../widgets/draw_signature_sheet.dart';
 import '../widgets/status_badge.dart';
 import '../widgets/pdf_shimmer_skeleton.dart';
 import '../widgets/bouncing_button.dart';
 import '../widgets/celebration_sparkle.dart';
+import '../../services/interactive_invoice_service.dart';
+import '../widgets/milestone_config_sheet.dart';
+import '../widgets/payment_proof_sheet.dart';
+import '../widgets/slide_to_confirm.dart';
 
 class InvoicePreviewScreen extends ConsumerStatefulWidget {
   final Invoice invoice;
@@ -142,6 +148,38 @@ class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
                             border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
                           ),
                           child: const Icon(Icons.copy_rounded, size: 18, color: Color(0xFF0F172A)),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () async {
+                          final applied = await DrawSignatureBottomSheet.show(context);
+                          if (applied == true && mounted) {
+                            setState(() {});
+                          }
+                        },
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: (profile.signatureUrl != null && profile.signatureUrl!.isNotEmpty)
+                                ? const Color(0xFFFFECE8)
+                                : Colors.white,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: (profile.signatureUrl != null && profile.signatureUrl!.isNotEmpty)
+                                  ? const Color(0xFFFF5722)
+                                  : const Color(0xFFE2E8F0),
+                              width: 1.2,
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.draw_rounded,
+                            size: 19,
+                            color: (profile.signatureUrl != null && profile.signatureUrl!.isNotEmpty)
+                                ? const Color(0xFFFF5722)
+                                : const Color(0xFF0F172A),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -418,7 +456,7 @@ class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
                     // PDF Preview Viewer with Key
                     Expanded(
                       child: PdfPreview(
-                        key: ValueKey('pdf_$activeTemplateId'),
+                        key: ValueKey('pdf_${activeTemplateId}_${profile.signatureUrl ?? ""}'),
                         build: (format) => PdfService.generateInvoicePdf(
                           currentInvoice,
                           profile,
@@ -495,7 +533,42 @@ class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
                         ],
                       ),
 
-                      const SizedBox(height: 18),
+                      if (!currentInvoice.isPaid) ...[
+                        const SizedBox(height: 14),
+                        SlideToConfirm(
+                          label: 'Slide to mark as Paid',
+                          completedLabel: 'Paid in Full 🎉',
+                          progressColor: const Color(0xFF10B981),
+                          icon: Icons.check_circle_rounded,
+                          onConfirmed: () async {
+                            await ref.read(invoiceProvider.notifier).togglePaymentStatus(currentInvoice.id);
+                            if (context.mounted) {
+                              CelebrationSparkle.show(
+                                context,
+                                message: 'Invoice #${currentInvoice.invoiceNumber} Paid! 🎉',
+                              );
+                            }
+                          },
+                        ),
+                      ],
+
+                      const SizedBox(height: 14),
+
+                      // ── Interactive Web Link & Read Status Card ──
+                      _buildInteractiveLinkCard(context, currentInvoice),
+
+                      // ── Payment Proof Banner (if submitted) ──
+                      if (currentInvoice.hasPaymentProof) ...[
+                        const SizedBox(height: 12),
+                        _buildPaymentProofBanner(context, currentInvoice),
+                      ],
+
+                      const SizedBox(height: 12),
+
+                      // ── Payment Milestones & Deposit Tranches ──
+                      _buildMilestonesSection(context, currentInvoice, profile, currencyFormat),
+
+                      const SizedBox(height: 16),
 
                     // ── Issued on & Due on Row ──
                     Row(
@@ -627,7 +700,7 @@ class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
 
                     // ── Line Items Horizontal Swipeable Carousel (From Mockup) ──
                     SizedBox(
-                      height: 175,
+                      height: 198,
                       child: PageView.builder(
                         controller: _pageController,
                         physics: const BouncingScrollPhysics(),
@@ -639,7 +712,7 @@ class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
 
                           return Container(
                             margin: const EdgeInsets.only(right: 12),
-                            padding: const EdgeInsets.all(18),
+                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(24),
@@ -749,6 +822,97 @@ class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
                               ),
                             ],
                           ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // ── Signatory & Digital Signature Card ──
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Row(
+                                children: [
+                                  Icon(Icons.draw_rounded, size: 18, color: Color(0xFFFF5722)),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Authorized Signatory',
+                                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+                                  ),
+                                ],
+                              ),
+                              TextButton(
+                                style: TextButton.styleFrom(
+                                  foregroundColor: const Color(0xFFFF5722),
+                                  padding: EdgeInsets.zero,
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                onPressed: () async {
+                                  final res = await DrawSignatureBottomSheet.show(context);
+                                  if (res == true && mounted) setState(() {});
+                                },
+                                child: Text(
+                                  (profile.signatureUrl != null && profile.signatureUrl!.isNotEmpty)
+                                      ? 'Redraw'
+                                      : 'Draw Signature',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          if (profile.signatureUrl != null && profile.signatureUrl!.isNotEmpty) ...[
+                            Container(
+                              height: 50,
+                              alignment: Alignment.centerLeft,
+                              child: Image.file(File(profile.signatureUrl!), fit: BoxFit.contain),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Signature attached • Appears on PDF bill',
+                              style: TextStyle(fontSize: 11.5, color: Color(0xFF10B981), fontWeight: FontWeight.w600),
+                            ),
+                          ] else ...[
+                            InkWell(
+                              onTap: () async {
+                                final res = await DrawSignatureBottomSheet.show(context);
+                                if (res == true && mounted) setState(() {});
+                              },
+                              borderRadius: BorderRadius.circular(12),
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF8FAFC),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: const Color(0xFFCBD5E1), style: BorderStyle.solid),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: const [
+                                    Icon(Icons.draw_outlined, size: 18, color: Color(0xFFFF5722)),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'Tap here to draw signature on this bill',
+                                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFFFF5722)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -911,4 +1075,389 @@ class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
       }
     }
   }
+
+  Widget _buildInteractiveLinkCard(BuildContext context, Invoice invoice) {
+    final hasViewed = invoice.clientViewedAt != null;
+    final viewCount = invoice.clientViewCount;
+    final formattedTime = hasViewed
+        ? DateFormat('dd MMM, h:mm a').format(invoice.clientViewedAt!)
+        : null;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0284C7).withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.link_rounded, size: 16, color: Color(0xFF0284C7)),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Live Web Invoice',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+                  ),
+                ],
+              ),
+              // Read Status Badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: hasViewed
+                      ? const Color(0xFF10B981).withValues(alpha: 0.12)
+                      : const Color(0xFF64748B).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      hasViewed ? Icons.remove_red_eye_rounded : Icons.visibility_off_outlined,
+                      size: 13,
+                      color: hasViewed ? const Color(0xFF10B981) : const Color(0xFF64748B),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      hasViewed ? 'Viewed ($viewCount)' : 'Unopened',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: hasViewed ? const Color(0xFF10B981) : const Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            hasViewed
+                ? 'Client opened invoice on $formattedTime'
+                : 'Send this lightweight link to track when the client views the bill.',
+            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => InteractiveInvoiceService.copyLinkToClipboard(context, invoice.id),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF0F172A),
+                    side: const BorderSide(color: Color(0xFFE2E8F0)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
+                  icon: const Icon(Icons.copy_rounded, size: 14),
+                  label: const Text('Copy Link', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => context.push('/inv/${invoice.id}'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF5722),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    elevation: 0,
+                  ),
+                  icon: const Icon(Icons.open_in_new_rounded, size: 14),
+                  label: const Text('Client Portal', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaymentProofBanner(BuildContext context, Invoice invoice) {
+    final isVerified = invoice.paymentProofStatus == 'verified';
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isVerified
+            ? const Color(0xFF10B981).withValues(alpha: 0.08)
+            : const Color(0xFFF59E0B).withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isVerified
+              ? const Color(0xFF10B981).withValues(alpha: 0.3)
+              : const Color(0xFFF59E0B).withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isVerified ? Icons.check_circle_rounded : Icons.pending_actions_rounded,
+            color: isVerified ? const Color(0xFF10B981) : const Color(0xFFD97706),
+            size: 20,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isVerified ? 'Payment Proof Verified' : 'Client Uploaded Proof of Payment',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w800,
+                    color: isVerified ? const Color(0xFF10B981) : const Color(0xFFD97706),
+                  ),
+                ),
+                Text(
+                  'UTR: ${invoice.paymentProofRef ?? "Submitted"}',
+                  style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+                ),
+              ],
+            ),
+          ),
+          if (!isVerified)
+            ElevatedButton(
+              onPressed: () {
+                ReviewProofDialog.show(
+                  context,
+                  invoice: invoice,
+                  onVerifyPaid: () {
+                    ref.read(invoiceProvider.notifier).verifyPaymentProof(invoice.id);
+                    CelebrationSparkle.show(context);
+                  },
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF10B981),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                minimumSize: Size.zero,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                elevation: 0,
+              ),
+              child: const Text('Review', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMilestonesSection(
+    BuildContext context,
+    Invoice invoice,
+    dynamic profile,
+    NumberFormat currencyFormat,
+  ) {
+    if (invoice.hasMilestones) {
+      final paidCount = invoice.paidMilestones.length;
+      final totalCount = invoice.milestones.length;
+
+      return Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF5722).withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.splitscreen_rounded, size: 15, color: Color(0xFFFF5722)),
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Payment Milestones',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+                    ),
+                  ],
+                ),
+                TextButton(
+                  onPressed: () {
+                    MilestoneConfigSheet.show(
+                      context,
+                      totalAmount: invoice.total,
+                      currencyCode: profile.currency,
+                      initialMilestones: invoice.milestones,
+                      onSave: (newMilestones) {
+                        ref.read(invoiceProvider.notifier).updateMilestones(invoice.id, newMilestones);
+                      },
+                    );
+                  },
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: const Text('Edit Tranches', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFFF5722))),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '$paidCount of $totalCount Milestones Paid (${currencyFormat.format(invoice.milestonesTotalPaid)} / ${currencyFormat.format(invoice.total)})',
+              style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 10),
+            ...invoice.milestones.map((m) {
+              final isPaid = m.isPaid;
+              final isActive = m.isActive;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isPaid
+                      ? const Color(0xFF10B981).withValues(alpha: 0.06)
+                      : (isActive ? const Color(0xFFFF5722).withValues(alpha: 0.05) : const Color(0xFFF8FAFC)),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isPaid
+                        ? const Color(0xFF10B981).withValues(alpha: 0.3)
+                        : (isActive ? const Color(0xFFFF5722).withValues(alpha: 0.4) : const Color(0xFFE2E8F0)),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      isPaid ? Icons.check_circle_rounded : (isActive ? Icons.play_arrow_rounded : Icons.lock_outline_rounded),
+                      size: 16,
+                      color: isPaid ? const Color(0xFF10B981) : (isActive ? const Color(0xFFFF5722) : const Color(0xFF94A3B8)),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        m.title,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: isPaid ? const Color(0xFF10B981) : const Color(0xFF0F172A),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Text(
+                      currencyFormat.format(m.amount),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: isPaid ? const Color(0xFF10B981) : const Color(0xFF0F172A),
+                      ),
+                    ),
+                    if (isActive && !invoice.isPaid) ...[
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () {
+                          ref.read(invoiceProvider.notifier).markMilestonePaid(invoice.id, m.id);
+                          CelebrationSparkle.show(context, message: '${m.title} Paid! 🎉');
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF10B981),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text('Mark Paid', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
+      );
+    }
+
+    // No milestones yet - show quick action
+    return GestureDetector(
+      onTap: () {
+        MilestoneConfigSheet.show(
+          context,
+          totalAmount: invoice.total,
+          currencyCode: profile.currency,
+          initialMilestones: const [],
+          onSave: (newMilestones) {
+            ref.read(invoiceProvider.notifier).updateMilestones(invoice.id, newMilestones);
+          },
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF5722).withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.splitscreen_rounded, size: 16, color: Color(0xFFFF5722)),
+            ),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Split into Payment Milestones',
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Color(0xFF0F172A)),
+                  ),
+                  Text(
+                    'E.g. 40% deposit, 30% mid-review, 30% handover',
+                    style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios_rounded, size: 13, color: Color(0xFF94A3B8)),
+          ],
+        ),
+      ),
+    );
+  }
 }
+

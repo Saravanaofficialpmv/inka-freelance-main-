@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,6 +17,7 @@ import 'presentation/screens/auth_screen.dart';
 import 'presentation/screens/dashboard_screen.dart';
 import 'presentation/screens/create_invoice_screen.dart';
 import 'presentation/screens/invoice_preview_screen.dart';
+import 'presentation/screens/interactive_web_invoice_screen.dart';
 import 'presentation/screens/clients_screen.dart';
 import 'data/models/invoice_item.dart';
 import 'data/models/invoice.dart';
@@ -43,9 +45,10 @@ import 'presentation/screens/bank_details_screen.dart';
 import 'presentation/screens/signature_settings_screen.dart';
 import 'presentation/screens/document_settings_screen.dart';
 import 'presentation/screens/notes_terms_screen.dart';
-import 'presentation/screens/language_settings_screen.dart';
+import 'presentation/screens/currency_settings_screen.dart';
 import 'presentation/screens/help_support_screen.dart';
 import 'presentation/screens/privacy_policy_screen.dart';
+import 'presentation/screens/language_settings_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -138,16 +141,42 @@ Future<void> _safeOpenBox<T>(String name) async {
   }
 }
 
+class GoRouterRefreshStream extends ChangeNotifier {
+  late final StreamSubscription<dynamic> _subscription;
+
+  GoRouterRefreshStream(Stream<dynamic> stream) {
+    notifyListeners();
+    _subscription = stream.asBroadcastStream().listen(
+      (dynamic _) => notifyListeners(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
+  }
+}
+
+final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
+final GlobalKey<NavigatorState> shellNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'shell');
+
 final routerProvider = Provider<GoRouter>((ref) {
+  final refreshNotifier = GoRouterRefreshStream(FirebaseAuth.instance.authStateChanges());
+  ref.onDispose(() => refreshNotifier.dispose());
+
   return GoRouter(
+    navigatorKey: rootNavigatorKey,
     initialLocation: '/splash',
+    refreshListenable: refreshNotifier,
     redirect: (context, state) {
       final user = FirebaseAuth.instance.currentUser;
       final location = state.matchedLocation;
       final isPublicRoute = location == '/splash' ||
           location == '/onboarding' ||
           location == '/auth' ||
-          location == '/state-showcase';
+          location == '/state-showcase' ||
+          location.startsWith('/inv/');
 
       if (user == null && !isPublicRoute) {
         return '/auth';
@@ -155,50 +184,82 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      GoRoute(path: '/splash', builder: (c, s) => const SplashScreen()),
-      GoRoute(path: '/onboarding', builder: (c, s) => const OnboardingScreen()),
+      GoRoute(parentNavigatorKey: rootNavigatorKey, path: '/splash', builder: (c, s) => const SplashScreen()),
+      GoRoute(parentNavigatorKey: rootNavigatorKey, path: '/onboarding', builder: (c, s) => const OnboardingScreen()),
       GoRoute(
+        parentNavigatorKey: rootNavigatorKey,
         path: '/auth', 
         builder: (c, s) => AuthScreen(
           initialIsSignUp: s.extra is bool ? (s.extra as bool) : false,
         ),
       ),
-      GoRoute(path: '/business-setup', builder: (c, s) => const BusinessSetupScreen()),
+      GoRoute(parentNavigatorKey: rootNavigatorKey, path: '/business-setup', builder: (c, s) => const BusinessSetupScreen()),
+      GoRoute(parentNavigatorKey: rootNavigatorKey, path: '/clients-select', builder: (c, s) => const ClientsScreen(isSelectionMode: true)),
+      GoRoute(parentNavigatorKey: rootNavigatorKey, path: '/products-select', builder: (c, s) => const ProductsScreen(isSelectionMode: true)),
+      GoRoute(
+        parentNavigatorKey: rootNavigatorKey,
+        path: '/inv/:id',
+        builder: (c, s) => InteractiveWebInvoiceScreen(
+          invoiceId: s.pathParameters['id'] ?? '',
+        ),
+      ),
       
       ShellRoute(
+        navigatorKey: shellNavigatorKey,
         builder: (context, state, child) => NavShell(state: state, child: child),
         routes: [
           GoRoute(path: '/dashboard', pageBuilder: (c, s) => const NoTransitionPage(child: DashboardScreen())),
           GoRoute(path: '/history', pageBuilder: (c, s) => const NoTransitionPage(child: InvoicesHistoryScreen())),
           GoRoute(path: '/clients-tab', pageBuilder: (c, s) => const NoTransitionPage(child: ClientsScreen())),
+          GoRoute(path: '/clients', pageBuilder: (c, s) => const NoTransitionPage(child: ClientsScreen())),
           GoRoute(path: '/expenses', pageBuilder: (c, s) => const NoTransitionPage(child: ExpensesScreen())),
           GoRoute(path: '/profile', pageBuilder: (c, s) => const NoTransitionPage(child: ProfileScreen())),
+          GoRoute(path: '/projects', pageBuilder: (c, s) => const NoTransitionPage(child: ProjectsScreen())),
+          GoRoute(path: '/products', pageBuilder: (c, s) => const NoTransitionPage(child: ProductsScreen())),
+          GoRoute(path: '/time-tracker', pageBuilder: (c, s) => const NoTransitionPage(child: TimeTrackerScreen())),
+          GoRoute(path: '/add-project', pageBuilder: (c, s) => const NoTransitionPage(child: AddEditProjectScreen())),
+          GoRoute(
+            path: '/edit-project',
+            pageBuilder: (c, s) => NoTransitionPage(
+              child: AddEditProjectScreen(project: s.extra is Project ? (s.extra as Project) : null),
+            ),
+          ),
+          GoRoute(
+            path: '/project-details',
+            pageBuilder: (c, s) => NoTransitionPage(
+              child: s.extra is Project ? ProjectDetailsScreen(project: s.extra as Project) : const ProjectsScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/client-details',
+            pageBuilder: (c, s) => NoTransitionPage(
+              child: s.extra is Client ? ClientDetailsScreen(client: s.extra as Client) : const ClientsScreen(),
+            ),
+          ),
+          GoRoute(path: '/subscription', pageBuilder: (c, s) => const NoTransitionPage(child: SubscriptionScreen())),
+          GoRoute(path: '/templates', pageBuilder: (c, s) => const NoTransitionPage(child: TemplateGalleryScreen())),
+          GoRoute(path: '/company-details', pageBuilder: (c, s) => const NoTransitionPage(child: CompanyDetailsScreen())),
+          GoRoute(path: '/bank-details', pageBuilder: (c, s) => const NoTransitionPage(child: BankDetailsScreen())),
+          GoRoute(path: '/signatures', pageBuilder: (c, s) => const NoTransitionPage(child: SignatureSettingsScreen())),
+          GoRoute(path: '/document-settings', pageBuilder: (c, s) => const NoTransitionPage(child: DocumentSettingsScreen())),
+          GoRoute(path: '/notes-terms', pageBuilder: (c, s) => const NoTransitionPage(child: NotesTermsScreen())),
+          GoRoute(path: '/language-settings', pageBuilder: (c, s) => const NoTransitionPage(child: LanguageSettingsScreen())),
+          GoRoute(path: '/currency-settings', pageBuilder: (c, s) => const NoTransitionPage(child: CurrencySettingsScreen())),
+          GoRoute(path: '/help-support', pageBuilder: (c, s) => const NoTransitionPage(child: HelpSupportScreen())),
+          GoRoute(path: '/privacy-policy', pageBuilder: (c, s) => const NoTransitionPage(child: PrivacyPolicyScreen())),
+          GoRoute(path: '/state-showcase', pageBuilder: (c, s) => const NoTransitionPage(child: StateShowcaseScreen())),
+          GoRoute(
+            path: '/preview',
+            pageBuilder: (c, s) => NoTransitionPage(
+              child: s.extra is Invoice ? InvoicePreviewScreen(invoice: s.extra as Invoice) : const DashboardScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/create-invoice',
+            pageBuilder: (c, s) => const NoTransitionPage(child: CreateInvoiceScreen()),
+          ),
         ],
       ),
-      GoRoute(path: '/create-invoice', builder: (c, s) => const CreateInvoiceScreen()),
-      
-      GoRoute(path: '/preview', builder: (c, s) => InvoicePreviewScreen(invoice: s.extra as Invoice)),
-      GoRoute(path: '/clients', builder: (c, s) => const ClientsScreen()),
-      GoRoute(path: '/clients-select', builder: (c, s) => const ClientsScreen(isSelectionMode: true)),
-      GoRoute(path: '/products', builder: (c, s) => const ProductsScreen()),
-      GoRoute(path: '/products-select', builder: (c, s) => const ProductsScreen(isSelectionMode: true)),
-      GoRoute(path: '/state-showcase', builder: (c, s) => const StateShowcaseScreen()),
-      GoRoute(path: '/time-tracker', builder: (c, s) => const TimeTrackerScreen()),
-      GoRoute(path: '/projects', builder: (c, s) => const ProjectsScreen()),
-      GoRoute(path: '/add-project', builder: (c, s) => const AddEditProjectScreen()),
-      GoRoute(path: '/edit-project', builder: (c, s) => AddEditProjectScreen(project: s.extra as Project?)),
-      GoRoute(path: '/project-details', builder: (c, s) => ProjectDetailsScreen(project: s.extra as Project)),
-      GoRoute(path: '/client-details', builder: (c, s) => ClientDetailsScreen(client: s.extra as Client)),
-      GoRoute(path: '/subscription', builder: (c, s) => const SubscriptionScreen()),
-      GoRoute(path: '/templates', builder: (c, s) => const TemplateGalleryScreen()),
-      GoRoute(path: '/company-details', builder: (c, s) => const CompanyDetailsScreen()),
-      GoRoute(path: '/bank-details', builder: (c, s) => const BankDetailsScreen()),
-      GoRoute(path: '/signatures', builder: (c, s) => const SignatureSettingsScreen()),
-      GoRoute(path: '/document-settings', builder: (c, s) => const DocumentSettingsScreen()),
-      GoRoute(path: '/notes-terms', builder: (c, s) => const NotesTermsScreen()),
-      GoRoute(path: '/language-settings', builder: (c, s) => const LanguageSettingsScreen()),
-      GoRoute(path: '/help-support', builder: (c, s) => const HelpSupportScreen()),
-      GoRoute(path: '/privacy-policy', builder: (c, s) => const PrivacyPolicyScreen()),
     ],
   );
 });
@@ -209,13 +270,12 @@ class InkaApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
-
     final currentLocale = ref.watch(localeProvider);
 
     return MaterialApp.router(
       title: 'Inka',
       theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
+      themeMode: ThemeMode.light,
       routerConfig: router,
       debugShowCheckedModeBanner: false,
       locale: currentLocale,

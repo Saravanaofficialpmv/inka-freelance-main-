@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../core/constants/colors.dart';
+import '../../core/theme/theme_helper.dart';
 
 class AppSearchBar extends StatefulWidget {
   final TextEditingController? controller;
@@ -84,12 +85,14 @@ class _AppSearchBarState extends State<AppSearchBar> {
       height: widget.height,
       margin: widget.margin,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.searchBarBg,
         borderRadius: BorderRadius.circular(widget.height / 2),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+        border: Border.all(color: context.cardBorder, width: 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
+            color: context.isDarkMode
+                ? Colors.black.withValues(alpha: 0.25)
+                : Colors.black.withValues(alpha: 0.04),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -107,15 +110,15 @@ class _AppSearchBarState extends State<AppSearchBar> {
               textAlignVertical: TextAlignVertical.center,
               onChanged: widget.onChanged,
               onSubmitted: widget.onSubmitted,
-              style: const TextStyle(
-                color: Color(0xFF0F172A),
+              style: TextStyle(
+                color: context.textPrimary,
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
               ),
               decoration: InputDecoration(
                 hintText: widget.hintText,
-                hintStyle: const TextStyle(
-                  color: Color(0xFF94A3B8),
+                hintStyle: TextStyle(
+                  color: context.textMuted,
                   fontSize: 14,
                   fontWeight: FontWeight.w400,
                 ),
@@ -139,11 +142,11 @@ class _AppSearchBarState extends State<AppSearchBar> {
                 widget.onChanged?.call('');
                 widget.onClear?.call();
               },
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 6),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
                 child: Icon(
                   Icons.close_rounded,
-                  color: Color(0xFF94A3B8),
+                  color: context.textMuted,
                   size: 18,
                 ),
               ),

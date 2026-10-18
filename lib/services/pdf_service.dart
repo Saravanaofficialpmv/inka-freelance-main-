@@ -623,7 +623,7 @@ class PdfService {
                     children: [
                       pw.SizedBox(height: 8),
                       pw.Text('Total Items: ${invoice.items.length}', style: const pw.TextStyle(fontSize: 8)),
-                      pw.Text('Total in Words: ${profile.currency} ${_numberToWords(invoice.total.toInt())} Only.', style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold)),
+                      pw.Text('Total in Words: ${CurrencyTaxService.findCurrency(profile.currency).code} ${_numberToWords(invoice.total.toInt())} Only.', style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold)),
                     ],
                   ),
                 ),

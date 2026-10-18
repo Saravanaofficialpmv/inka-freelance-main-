@@ -9,17 +9,24 @@ import '../viewmodels/expense_viewmodel.dart';
 import '../viewmodels/invoice_viewmodel.dart';
 import '../viewmodels/project_viewmodel.dart';
 import '../viewmodels/time_tracker_viewmodel.dart';
+import '../providers/sync_status_provider.dart';
 export 'tibsy_pull_to_refresh.dart';
 
 /// Centralized function to sync Firestore cloud data and refresh all local providers
 Future<void> syncAndRefreshEntireApp(WidgetRef ref) async {
+  final syncNotifier = ref.read(syncStatusProvider.notifier);
+  syncNotifier.markSynchronizing();
+
+  bool syncSuccess = true;
   try {
     final user = ref.read(authProvider).value;
     if (user != null) {
       final firestoreService = ref.read(firestoreServiceProvider);
       await firestoreService.syncAllData(user.uid);
     }
-  } catch (_) {}
+  } catch (_) {
+    syncSuccess = false;
+  }
 
   try {
     ref.read(invoiceProvider.notifier).refreshFromLocal();
@@ -32,6 +39,11 @@ Future<void> syncAndRefreshEntireApp(WidgetRef ref) async {
   } catch (_) {}
 
   await Future.delayed(const Duration(milliseconds: 300));
+  if (syncSuccess) {
+    syncNotifier.markSynced();
+  } else {
+    syncNotifier.markFailed();
+  }
 }
 
 /// Animated Tibsy GIF used as a vibrant custom refresh icon
@@ -56,20 +68,14 @@ class TibsyRefreshIcon extends StatelessWidget {
         fit: fit,
         errorBuilder: (context, error, stackTrace) {
           return Image.asset(
-            'tibsy-dp-3.gif',
+            'assets/images/tibsy-dp-2.gif',
             width: size,
             height: size,
             fit: fit,
-            errorBuilder: (ctx, err, stack) => Image.asset(
-              'assets/images/tibsy-dp-2.gif',
-              width: size,
-              height: size,
-              fit: fit,
-              errorBuilder: (c, e, s) => Icon(
-                Icons.refresh_rounded,
-                size: size * 0.8,
-                color: const Color(0xFFFF5722),
-              ),
+            errorBuilder: (c, e, s) => Icon(
+              Icons.refresh_rounded,
+              size: size * 0.8,
+              color: const Color(0xFFFF5722),
             ),
           );
         },
@@ -167,15 +173,13 @@ class _TibsyRefreshButtonState extends ConsumerState<TibsyRefreshButton>
           color: Colors.white,
           shape: BoxShape.circle,
           border: Border.all(
-            color: _isRefreshing ? const Color(0xFFFF5722) : const Color(0xFFE5E7EB),
-            width: _isRefreshing ? 1.5 : 1,
+            color: _isRefreshing ? const Color(0xFF0F172A) : const Color(0xFFE5E7EB),
+            width: _isRefreshing ? 1.4 : 1,
           ),
           boxShadow: [
             BoxShadow(
-              color: _isRefreshing
-                  ? const Color(0xFFFF5722).withValues(alpha: 0.25)
-                  : Colors.black.withValues(alpha: 0.03),
-              blurRadius: _isRefreshing ? 10 : 6,
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 6,
               offset: const Offset(0, 2),
             ),
           ],

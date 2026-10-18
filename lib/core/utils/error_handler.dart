@@ -6,7 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 class ErrorHandler {
   static String getErrorMessage(dynamic error) {
-    if (error is SocketException) {
+    if (!kIsWeb && error is SocketException) {
       return 'No internet connection. Please check your network and try again.';
     }
 
@@ -25,6 +25,11 @@ class ErrorHandler {
 
     if (error is FirebaseAuthException) {
       switch (error.code) {
+        case 'popup-closed-by-user':
+        case 'cancelled-popup-request':
+          return 'Sign-in was cancelled.';
+        case 'popup-blocked':
+          return 'Sign-in popup was blocked by your browser. Please allow popups for this site and try again.';
         case 'user-not-found':
         case 'invalid-credential':
         case 'wrong-password':

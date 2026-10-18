@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
+import '../../core/utils/navigation_utils.dart';
 import '../../data/models/subscription_plan.dart';
 import '../providers/subscription_provider.dart';
 import '../widgets/inka_brand_logo.dart';
@@ -188,7 +188,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   GestureDetector(
-                    onTap: () => context.pop(),
+                    onTap: () => safeNavigateBack(context, fallbackRoute: '/profile'),
                     child: Container(
                       width: 44,
                       height: 44,

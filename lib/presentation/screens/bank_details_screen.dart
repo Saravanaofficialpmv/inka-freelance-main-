@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/colors.dart';
-import '../../core/localization/app_localizations.dart';
+import '../../core/utils/navigation_utils.dart';
 import '../providers/profile_provider.dart';
 import '../widgets/payment_qr_sheet.dart';
 
@@ -13,261 +14,433 @@ class BankDetailsScreen extends ConsumerStatefulWidget {
 }
 
 class _BankDetailsScreenState extends ConsumerState<BankDetailsScreen> {
-  late final TextEditingController _bankNameController;
-  late final TextEditingController _accountNoController;
   late final TextEditingController _ifscController;
+  late final TextEditingController _bankNameController;
+  late final TextEditingController _branchNameController;
+  late final TextEditingController _accountHolderController;
+  late final TextEditingController _accountNoController;
+  late final TextEditingController _confirmAccountNoController;
+  late final TextEditingController _openingBalanceController;
   late final TextEditingController _upiController;
+  late final TextEditingController _upiNumberController;
+  late final TextEditingController _notesController;
+
+  bool _isPrimaryAccount = true;
   bool _isSaving = false;
+  String? _accountMismatchError;
 
   @override
   void initState() {
     super.initState();
     final profile = ref.read(profileProvider);
-    _bankNameController = TextEditingController(text: profile.bankName ?? '');
-    _accountNoController = TextEditingController(text: profile.accountNo ?? '');
+
     _ifscController = TextEditingController(text: profile.ifscCode ?? '');
+    _bankNameController = TextEditingController(text: profile.bankName ?? '');
+    _branchNameController = TextEditingController(text: profile.branchName ?? '');
+    _accountHolderController = TextEditingController(
+      text: (profile.accountHolderName != null && profile.accountHolderName!.isNotEmpty)
+          ? profile.accountHolderName!
+          : profile.businessName,
+    );
+    _accountNoController = TextEditingController(text: profile.accountNo ?? '');
+    _confirmAccountNoController = TextEditingController(text: profile.accountNo ?? '');
+    _openingBalanceController = TextEditingController(
+      text: profile.openingBalance != null && profile.openingBalance! > 0
+          ? profile.openingBalance!.toStringAsFixed(2).replaceAll(RegExp(r'\.00$'), '')
+          : '',
+    );
     _upiController = TextEditingController(text: profile.upiId ?? '');
+    _upiNumberController = TextEditingController(text: profile.upiNumber ?? '');
+    _notesController = TextEditingController(text: profile.bankNotes ?? '');
+    _isPrimaryAccount = profile.isPrimaryAccount;
+
+    _accountNoController.addListener(_validateAccountMatch);
+    _confirmAccountNoController.addListener(_validateAccountMatch);
+  }
+
+  void _validateAccountMatch() {
+    final acc = _accountNoController.text.trim();
+    final confirm = _confirmAccountNoController.text.trim();
+    if (confirm.isNotEmpty && acc.isNotEmpty && acc != confirm) {
+      if (_accountMismatchError == null) {
+        setState(() => _accountMismatchError = 'Account numbers do not match');
+      }
+    } else {
+      if (_accountMismatchError != null) {
+        setState(() => _accountMismatchError = null);
+      }
+    }
   }
 
   @override
   void dispose() {
-    _bankNameController.dispose();
-    _accountNoController.dispose();
     _ifscController.dispose();
+    _bankNameController.dispose();
+    _branchNameController.dispose();
+    _accountHolderController.dispose();
+    _accountNoController.dispose();
+    _confirmAccountNoController.dispose();
+    _openingBalanceController.dispose();
     _upiController.dispose();
+    _upiNumberController.dispose();
+    _notesController.dispose();
     super.dispose();
   }
 
+  /// Known Indian Bank codes for instantaneous offline autofill
+  static const Map<String, String> _knownBankPrefixes = {
+    'HDFC': 'HDFC Bank',
+    'SBIN': 'State Bank of India',
+    'ICIC': 'ICICI Bank',
+    'UTIB': 'Axis Bank',
+    'KKBK': 'Kotak Mahindra Bank',
+    'PUNB': 'Punjab National Bank',
+    'BARB': 'Bank of Baroda',
+    'CNRB': 'Canara Bank',
+    'UBIN': 'Union Bank of India',
+    'IDFB': 'IDFC FIRST Bank',
+    'YESB': 'Yes Bank',
+    'INDB': 'IndusInd Bank',
+    'FDRL': 'Federal Bank',
+    'IOBA': 'Indian Overseas Bank',
+  };
+
+  void _onIfscChanged(String ifsc) {
+    final clean = ifsc.trim().toUpperCase();
+    if (clean.length >= 4) {
+      final prefix = clean.substring(0, 4);
+      if (_knownBankPrefixes.containsKey(prefix) && _bankNameController.text.trim().isEmpty) {
+        setState(() {
+          _bankNameController.text = _knownBankPrefixes[prefix]!;
+        });
+      }
+    }
+  }
+
   Future<void> _saveDetails() async {
+    final ifsc = _ifscController.text.trim().toUpperCase();
+    final bankName = _bankNameController.text.trim();
+    final branchName = _branchNameController.text.trim();
+    final accountHolder = _accountHolderController.text.trim();
+    final accountNo = _accountNoController.text.trim();
+    final confirmAccountNo = _confirmAccountNoController.text.trim();
+
+    // Validations
+    if (ifsc.isEmpty) {
+      _showSnackbar('Bank IFSC is required', isError: true);
+      return;
+    }
+    if (bankName.isEmpty) {
+      _showSnackbar('Bank name is required', isError: true);
+      return;
+    }
+    if (branchName.isEmpty) {
+      _showSnackbar('Branch name is required', isError: true);
+      return;
+    }
+    if (accountNo.isEmpty) {
+      _showSnackbar('Bank account number is required', isError: true);
+      return;
+    }
+    if (confirmAccountNo.isNotEmpty && accountNo != confirmAccountNo) {
+      _showSnackbar('Account numbers do not match', isError: true);
+      return;
+    }
+
+    double? openingBalance;
+    final balText = _openingBalanceController.text.trim();
+    if (balText.isNotEmpty) {
+      openingBalance = double.tryParse(balText.replaceAll(',', ''));
+    }
+
     setState(() => _isSaving = true);
     try {
       final profile = ref.read(profileProvider);
       final updated = profile.copyWith(
-        bankName: _bankNameController.text.trim(),
-        accountNo: _accountNoController.text.trim(),
-        ifscCode: _ifscController.text.trim(),
+        ifscCode: ifsc,
+        bankName: bankName,
+        branchName: branchName,
+        accountHolderName: accountHolder,
+        accountNo: accountNo,
+        openingBalance: openingBalance,
         upiId: _upiController.text.trim(),
+        upiNumber: _upiNumberController.text.trim(),
+        bankNotes: _notesController.text.trim(),
+        isPrimaryAccount: _isPrimaryAccount,
       );
+
       await ref.read(profileProvider.notifier).updateProfile(updated);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Bank and UPI details updated successfully!'),
-            backgroundColor: AppColors.success,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-        Navigator.pop(context);
+        _showSnackbar('Bank details updated successfully!');
+        safeNavigateBack(context, fallbackRoute: '/profile');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update: $e'), backgroundColor: AppColors.error),
-        );
+        _showSnackbar('Failed to update: $e', isError: true);
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
   }
 
+  void _showSnackbar(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? AppColors.error : AppColors.success,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+
   @override
   Widget build(BuildContext context) {
-    final upiId = _upiController.text.trim();
     final businessProfile = ref.watch(profileProvider);
+    final upiId = _upiController.text.trim();
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: const Color(0xFFF1F5F9),
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary, size: 20),
-          onPressed: () => Navigator.pop(context),
+          icon: const Icon(Icons.arrow_back, color: Color(0xFF0F172A), size: 24),
+          onPressed: () => safeNavigateBack(context, fallbackRoute: '/profile'),
         ),
-        title: Text(
-          AppLocalizations.of(context)?.translate('bank_details') ?? 'Bank & Digital Payments',
-          style: const TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 18,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.3,
+        title: const Text(
+          'Add New bank',
+          style: TextStyle(
+            color: Color(0xFF0F172A),
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.4,
           ),
         ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(color: AppColors.cardBorder, height: 1),
+          child: Container(color: const Color(0xFFE2E8F0), height: 1),
         ),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 100),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Header Explanation Card ──
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.06),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.18)),
-                ),
-                child: Row(
-                  children: [
+              // ── 1. Bank Details Section ──
+              _buildSectionTitle('Bank details'),
+              _buildCardContainer(
+                children: [
+                  _buildFormInputField(
+                    label: 'Bank IFSC',
+                    isRequired: true,
+                    controller: _ifscController,
+                    textCapitalization: TextCapitalization.characters,
+                    onChanged: _onIfscChanged,
+                  ),
+                  const SizedBox(height: 14),
+                  _buildFormInputField(
+                    label: 'Bank name',
+                    isRequired: true,
+                    controller: _bankNameController,
+                  ),
+                  const SizedBox(height: 14),
+                  _buildFormInputField(
+                    label: 'Branch name',
+                    isRequired: true,
+                    controller: _branchNameController,
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 20),
+
+              // ── 2. Account Information Section ──
+              _buildSectionTitle('Account information'),
+              _buildCardContainer(
+                children: [
+                  _buildFormInputField(
+                    label: 'Account Holder Name',
+                    isRequired: false,
+                    controller: _accountHolderController,
+                  ),
+                  const SizedBox(height: 14),
+                  _buildFormInputField(
+                    label: 'Bank account number',
+                    isRequired: true,
+                    controller: _accountNoController,
+                    keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 14),
+                  _buildFormInputField(
+                    label: 'Confirm account number',
+                    isRequired: true,
+                    controller: _confirmAccountNoController,
+                    keyboardType: TextInputType.number,
+                    errorText: _accountMismatchError,
+                    suffixIcon: (_confirmAccountNoController.text.isNotEmpty &&
+                            _accountNoController.text.isNotEmpty &&
+                            _confirmAccountNoController.text == _accountNoController.text)
+                        ? const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 20)
+                        : null,
+                  ),
+                  const SizedBox(height: 14),
+                  _buildFormInputField(
+                    label: 'Opening balance',
+                    isRequired: false,
+                    controller: _openingBalanceController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 20),
+
+              // ── 3. UPI Details Section ──
+              _buildSectionTitle('UPI details'),
+              _buildCardContainer(
+                children: [
+                  _buildFormInputField(
+                    label: 'UPI (Optional)',
+                    isRequired: false,
+                    controller: _upiController,
+                    keyboardType: TextInputType.emailAddress,
+                    onChanged: (_) => setState(() {}),
+                  ),
+                  const SizedBox(height: 14),
+                  _buildFormInputField(
+                    label: 'GPay/ PhonePe number (Optional)',
+                    isRequired: false,
+                    controller: _upiNumberController,
+                    keyboardType: TextInputType.phone,
+                  ),
+                  if (upiId.isNotEmpty) ...[
+                    const SizedBox(height: 14),
                     Container(
-                      width: 40,
-                      height: 40,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                       decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.12),
-                        shape: BoxShape.circle,
+                        color: const Color(0xFFFFF0EB),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFFFCCBC)),
                       ),
-                      child: const Icon(Icons.account_balance_rounded, color: AppColors.primary, size: 20),
-                    ),
-                    const SizedBox(width: 14),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Row(
                         children: [
-                          Text(
-                            'Invoice Payment Details',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary),
+                          const Icon(Icons.qr_code_2_rounded, color: AppColors.primary, size: 22),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Dynamic UPI QR active for $upiId',
+                              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFFC84015)),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                          SizedBox(height: 2),
-                          Text(
-                            'These credentials and dynamic UPI QR appear on your invoices to collect payments directly.',
-                            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                          GestureDetector(
+                            onTap: () => PaymentQrSheet.show(context, profile: businessProfile),
+                            child: const Text(
+                              'Preview QR',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary),
+                            ),
                           ),
                         ],
                       ),
                     ),
                   ],
-                ),
+                ],
               ),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
 
-              // ── Form Card ──
-              const Padding(
-                padding: EdgeInsets.only(left: 4, bottom: 8),
-                child: Text(
-                  'Bank Account Credentials',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
-                    letterSpacing: -0.2,
-                  ),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppColors.cardBorder),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.02),
-                      blurRadius: 10,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    _buildInputField(
-                      label: 'Bank Name',
-                      controller: _bankNameController,
-                      icon: Icons.account_balance_outlined,
-                      hint: 'e.g. HDFC Bank, State Bank of India',
-                    ),
-                    const SizedBox(height: 16),
-                    _buildInputField(
-                      label: 'Account Number',
-                      controller: _accountNoController,
-                      icon: Icons.tag,
-                      hint: 'e.g. 50100234567890',
-                      keyboardType: TextInputType.number,
-                    ),
-                    const SizedBox(height: 16),
-                    _buildInputField(
-                      label: 'IFSC / Branch Routing Code',
-                      controller: _ifscController,
-                      icon: Icons.numbers_outlined,
-                      hint: 'e.g. HDFC0001234',
-                    ),
-                    const SizedBox(height: 16),
-                    _buildInputField(
-                      label: 'UPI ID (Virtual Payment Address)',
-                      controller: _upiController,
-                      icon: Icons.qr_code_2_rounded,
-                      hint: 'username@okaxis, yourbusiness@upi',
-                    ),
-                  ],
-                ),
-              ),
-
-              if (upiId.isNotEmpty) ...[
-                const SizedBox(height: 24),
-                // ── UPI QR Preview Button ──
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.cardBorder),
-                  ),
-                  child: Row(
+              // ── 4. Additional Options Section ──
+              _buildSectionTitle('Additional options'),
+              _buildCardContainer(
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.qr_code_scanner_rounded, color: AppColors.primary, size: 28),
-                      const SizedBox(width: 14),
-                      Expanded(
+                      _buildFormInputField(
+                        label: 'Notes',
+                        isRequired: false,
+                        controller: _notesController,
+                        maxLines: 2,
+                        minLines: 1,
+                      ),
+                      const SizedBox(height: 6),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 4),
+                        child: Text(
+                          '(Swift Code, Beneficiary Name) etc, notes will also be shown along with the bank details',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF64748B),
+                            height: 1.35,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              'Instant UPI QR Enabled',
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary),
-                            ),
                             Text(
-                              upiId,
-                              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                              'Set as Primary Account',
+                              style: TextStyle(
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF0F172A),
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Account will be selected by default on record payment.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF64748B),
+                              ),
                             ),
                           ],
                         ),
                       ),
-                      OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.primary,
-                          side: const BorderSide(color: AppColors.primary),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                        onPressed: () => PaymentQrSheet.show(context, profile: businessProfile),
-                        child: const Text('Preview QR', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      const SizedBox(width: 12),
+                      Switch(
+                        value: _isPrimaryAccount,
+                        activeThumbColor: AppColors.primary,
+                        activeTrackColor: const Color(0xFFFFCCBC),
+                        inactiveThumbColor: const Color(0xFFCBD5E1),
+                        inactiveTrackColor: const Color(0xFFE2E8F0),
+                        onChanged: (val) {
+                          HapticFeedback.selectionClick();
+                          setState(() => _isPrimaryAccount = val);
+                        },
                       ),
                     ],
                   ),
-                ),
-              ],
+                ],
+              ),
             ],
           ),
         ),
       ),
       bottomNavigationBar: Container(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
         decoration: BoxDecoration(
           color: Colors.white,
-          border: Border(top: BorderSide(color: AppColors.cardBorder)),
+          border: const Border(top: BorderSide(color: Color(0xFFE2E8F0))),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 12,
-              offset: const Offset(0, -4),
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 10,
+              offset: const Offset(0, -3),
             ),
           ],
         ),
@@ -279,7 +452,7 @@ class _BankDetailsScreenState extends ConsumerState<BankDetailsScreen> {
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
               elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),
             onPressed: _isSaving ? null : _saveDetails,
             child: _isSaving
@@ -288,9 +461,13 @@ class _BankDetailsScreenState extends ConsumerState<BankDetailsScreen> {
                     height: 24,
                     child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
                   )
-                : Text(
-                    AppLocalizations.of(context)?.translate('save') ?? 'Save Changes',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: -0.2),
+                : const Text(
+                    'Save',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: -0.2,
+                    ),
                   ),
           ),
         ),
@@ -298,44 +475,119 @@ class _BankDetailsScreenState extends ConsumerState<BankDetailsScreen> {
     );
   }
 
-  Widget _buildInputField({
-    required String label,
-    required TextEditingController controller,
-    required IconData icon,
-    String? hint,
-    TextInputType keyboardType = TextInputType.text,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+  Widget _buildSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 8),
+      child: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 14.5,
+          fontWeight: FontWeight.w700,
+          color: Color(0xFF475569),
+          letterSpacing: -0.2,
         ),
-        const SizedBox(height: 6),
-        TextField(
-          controller: controller,
-          keyboardType: keyboardType,
-          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 14, fontWeight: FontWeight.normal),
-            prefixIcon: Icon(icon, color: AppColors.textSecondary, size: 20),
-            filled: true,
-            fillColor: const Color(0xFFF8FAFC),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: AppColors.cardBorder),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: AppColors.primary, width: 1.8),
-            ),
+      ),
+    );
+  }
+
+  Widget _buildCardContainer({required List<Widget> children}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
-          onChanged: (_) => setState(() {}),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: children,
+      ),
+    );
+  }
+
+  Widget _buildFormInputField({
+    required String label,
+    required bool isRequired,
+    required TextEditingController controller,
+    TextInputType keyboardType = TextInputType.text,
+    TextCapitalization textCapitalization = TextCapitalization.none,
+    int maxLines = 1,
+    int minLines = 1,
+    String? errorText,
+    Widget? suffixIcon,
+    ValueChanged<String>? onChanged,
+  }) {
+    return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      textCapitalization: textCapitalization,
+      maxLines: maxLines,
+      minLines: minLines,
+      style: const TextStyle(
+        fontSize: 15,
+        fontWeight: FontWeight.w600,
+        color: Color(0xFF0F172A),
+      ),
+      decoration: InputDecoration(
+        label: RichText(
+          text: TextSpan(
+            text: label,
+            style: const TextStyle(
+              color: Color(0xFF64748B),
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+            children: isRequired
+                ? const [
+                    TextSpan(
+                      text: '*',
+                      style: TextStyle(
+                        color: Color(0xFFEF4444),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ]
+                : [],
+          ),
         ),
-      ],
+        floatingLabelBehavior: FloatingLabelBehavior.auto,
+        errorText: errorText,
+        errorStyle: const TextStyle(fontSize: 11.5, color: Color(0xFFEF4444)),
+        suffixIcon: suffixIcon,
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.primary, width: 1.6),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFEF4444), width: 1.4),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFEF4444), width: 1.6),
+        ),
+      ),
+      onChanged: onChanged,
     );
   }
 }

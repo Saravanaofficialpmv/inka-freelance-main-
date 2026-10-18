@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../providers/client_provider.dart';
 import '../../data/models/invoice.dart';
+import '../../data/models/payment_milestone.dart';
 import '../../services/firestore_service.dart';
 
 class InvoiceNotifier extends StateNotifier<List<Invoice>> {
@@ -38,6 +39,133 @@ class InvoiceNotifier extends StateNotifier<List<Invoice>> {
     await _invoiceBox.put(updatedInvoice.id, updatedInvoice);
     state = _invoiceBox.values.toList();
     await _firestoreService.saveInvoice(updatedInvoice);
+  }
+
+  /// Automatically logs read receipts when a client views the live invoice link
+  Future<void> recordClientView(String id) async {
+    final index = state.indexWhere((inv) => inv.id == id || inv.invoiceNumber == id);
+    if (index == -1) return;
+
+    final invoice = state[index];
+    final updated = invoice.copyWith(
+      clientViewedAt: DateTime.now(),
+      clientViewCount: invoice.clientViewCount + 1,
+    );
+    await updateInvoice(updated);
+  }
+
+  /// Client submits proof of payment (UTR / Transaction ID / screenshot)
+  Future<void> submitPaymentProof(
+    String id, {
+    required String refNumber,
+    String? note,
+    String? imageBase64,
+    String? milestoneId,
+  }) async {
+    final index = state.indexWhere((inv) => inv.id == id || inv.invoiceNumber == id);
+    if (index == -1) return;
+
+    final invoice = state[index];
+    List<PaymentMilestone> updatedMilestones = invoice.milestones;
+
+    if (milestoneId != null && invoice.milestones.isNotEmpty) {
+      updatedMilestones = invoice.milestones.map((m) {
+        if (m.id == milestoneId) {
+          return m.copyWith(
+            transactionRef: refNumber,
+            proofAttachment: imageBase64,
+          );
+        }
+        return m;
+      }).toList();
+    }
+
+    final updated = invoice.copyWith(
+      paymentProofRef: refNumber,
+      paymentProofDate: DateTime.now(),
+      paymentProofNote: note,
+      paymentProofStatus: 'submitted',
+      paymentProofImage: imageBase64,
+      milestones: updatedMilestones,
+    );
+    await updateInvoice(updated);
+  }
+
+  /// Freelancer verifies client's submitted payment proof and marks settled
+  Future<void> verifyPaymentProof(String id, {bool markAsPaid = true}) async {
+    final index = state.indexWhere((inv) => inv.id == id || inv.invoiceNumber == id);
+    if (index == -1) return;
+
+    final invoice = state[index];
+    List<PaymentMilestone> updatedMilestones = invoice.milestones;
+
+    if (markAsPaid && invoice.milestones.isNotEmpty) {
+      updatedMilestones = invoice.milestones.map((m) {
+        return m.copyWith(
+          status: 'paid',
+          paidAt: m.paidAt ?? DateTime.now(),
+        );
+      }).toList();
+    }
+
+    final updated = invoice.copyWith(
+      paymentProofStatus: 'verified',
+      status: markAsPaid ? 'paid' : invoice.status,
+      milestones: updatedMilestones,
+    );
+    await updateInvoice(updated);
+  }
+
+  /// Replaces or configures milestone tranches for an invoice
+  Future<void> updateMilestones(String id, List<PaymentMilestone> milestones) async {
+    final index = state.indexWhere((inv) => inv.id == id || inv.invoiceNumber == id);
+    if (index == -1) return;
+
+    final invoice = state[index];
+    final allPaid = milestones.isNotEmpty && milestones.every((m) => m.isPaid);
+
+    final updated = invoice.copyWith(
+      milestones: milestones,
+      status: allPaid ? 'paid' : (invoice.status == 'paid' && !allPaid ? 'pending' : invoice.status),
+    );
+    await updateInvoice(updated);
+  }
+
+  /// Marks a specific milestone tranche as paid and unlocks the next tranche
+  Future<void> markMilestonePaid(String id, String milestoneId, {String? txRef}) async {
+    final index = state.indexWhere((inv) => inv.id == id || inv.invoiceNumber == id);
+    if (index == -1) return;
+
+    final invoice = state[index];
+    if (invoice.milestones.isEmpty) return;
+
+    bool found = false;
+    final updatedMilestones = <PaymentMilestone>[];
+
+    for (int i = 0; i < invoice.milestones.length; i++) {
+      final m = invoice.milestones[i];
+      if (m.id == milestoneId) {
+        found = true;
+        updatedMilestones.add(m.copyWith(
+          status: 'paid',
+          paidAt: DateTime.now(),
+          transactionRef: txRef ?? m.transactionRef,
+        ));
+      } else if (found && m.isPending) {
+        // Unlock the immediate next pending milestone as active
+        updatedMilestones.add(m.copyWith(status: 'active'));
+        found = false; // Only unlock the immediate next
+      } else {
+        updatedMilestones.add(m);
+      }
+    }
+
+    final allPaid = updatedMilestones.every((m) => m.isPaid);
+    final updated = invoice.copyWith(
+      milestones: updatedMilestones,
+      status: allPaid ? 'paid' : invoice.status,
+    );
+    await updateInvoice(updated);
   }
 
   Future<void> togglePaymentStatus(String id) async {

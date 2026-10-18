@@ -4,16 +4,23 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import '../../data/models/client.dart';
 import '../../data/models/invoice.dart';
 import '../../data/models/invoice_item.dart';
+import '../../data/models/payment_milestone.dart';
 import '../../data/models/product.dart';
 import '../../services/currency_tax_service.dart';
 import '../../services/pdf_service.dart';
+import '../../core/utils/navigation_utils.dart';
 import '../providers/client_provider.dart';
 import '../providers/profile_provider.dart';
 import '../viewmodels/invoice_viewmodel.dart';
+import '../widgets/device_contact_picker_sheet.dart';
+import '../widgets/milestone_config_sheet.dart';
+import '../widgets/animated_currency_text.dart';
+import '../widgets/voice_waveform_indicator.dart';
 
 class CreateInvoiceScreen extends ConsumerStatefulWidget {
   final Invoice? invoiceToEdit;
@@ -25,8 +32,32 @@ class CreateInvoiceScreen extends ConsumerStatefulWidget {
     this.isBottomSheet = false,
   });
 
-  /// Static helper to open Create Invoice as a modal bottom sheet popup
+  /// Static helper to open Create Invoice as a modal bottom sheet popup (or dialog on desktop)
   static Future<Invoice?> showAsBottomSheet(BuildContext context, {Invoice? invoiceToEdit}) {
+    final isWide = MediaQuery.sizeOf(context).width >= 800;
+    if (isWide) {
+      return showDialog<Invoice>(
+        context: context,
+        useRootNavigator: true,
+        builder: (ctx) => Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: 740,
+              maxHeight: MediaQuery.sizeOf(ctx).height * 0.92,
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(28),
+              child: CreateInvoiceScreen(
+                invoiceToEdit: invoiceToEdit,
+                isBottomSheet: false,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     return showModalBottomSheet<Invoice>(
       context: context,
       useRootNavigator: true,
@@ -50,9 +81,11 @@ class _CreateInvoiceScreenState extends ConsumerState<CreateInvoiceScreen> {
   DateTime _dueDate = DateTime.now().add(const Duration(days: 14));
   String _notes = '';
   late String _invoiceNumber;
+  List<PaymentMilestone> _milestones = [];
 
   late stt.SpeechToText _speech;
   bool _isListening = false;
+  VoiceState _voiceState = VoiceState.idle;
 
   final _itemNameController = TextEditingController();
   final _itemPriceController = TextEditingController();
@@ -71,6 +104,7 @@ class _CreateInvoiceScreenState extends ConsumerState<CreateInvoiceScreen> {
       _issueDate = invoice.issueDate;
       _dueDate = invoice.dueDate;
       _notes = invoice.notes;
+      _milestones = List.from(invoice.milestones);
     } else {
       _invoiceNumber = '${100000 + Random().nextInt(899999)}';
     }
@@ -78,6 +112,7 @@ class _CreateInvoiceScreenState extends ConsumerState<CreateInvoiceScreen> {
 
   @override
   void dispose() {
+    _speech.stop();
     _itemNameController.dispose();
     _itemPriceController.dispose();
     _itemQtyController.dispose();
@@ -86,26 +121,88 @@ class _CreateInvoiceScreenState extends ConsumerState<CreateInvoiceScreen> {
 
   void _listen() async {
     if (!_isListening) {
+      final status = await Permission.microphone.request();
+      if (!status.isGranted) {
+        if (mounted) {
+          setState(() => _voiceState = VoiceState.error);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Microphone permission is required for voice commands'),
+              backgroundColor: const Color(0xFFEF4444),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          );
+          Future.delayed(const Duration(milliseconds: 1600), () {
+            if (mounted && _voiceState == VoiceState.error) {
+              setState(() => _voiceState = VoiceState.idle);
+            }
+          });
+        }
+        return;
+      }
+
       bool available = await _speech.initialize(
         onStatus: (val) {
-          if (val == 'done' || val == 'notListening') {
-            setState(() => _isListening = false);
+          if (val == 'listening') {
+            if (mounted) setState(() => _voiceState = VoiceState.listening);
+          } else if (val == 'done' || val == 'notListening') {
+            if (mounted) {
+              setState(() {
+                _isListening = false;
+                if (_voiceState != VoiceState.success) {
+                  _voiceState = VoiceState.idle;
+                }
+              });
+            }
           }
         },
-        onError: (val) => setState(() => _isListening = false),
+        onError: (val) => setState(() {
+          _isListening = false;
+          _voiceState = VoiceState.error;
+          Future.delayed(const Duration(milliseconds: 1600), () {
+            if (mounted && _voiceState == VoiceState.error) {
+              setState(() => _voiceState = VoiceState.idle);
+            }
+          });
+        }),
       );
       if (available) {
-        setState(() => _isListening = true);
+        setState(() {
+          _isListening = true;
+          _voiceState = VoiceState.listening;
+        });
         _speech.listen(
           onResult: (val) {
             setState(() {
               _parseVoiceCommand(val.recognizedWords);
+              if (val.finalResult) {
+                _voiceState = VoiceState.success;
+                Future.delayed(const Duration(milliseconds: 1200), () {
+                  if (mounted && _voiceState == VoiceState.success) {
+                    setState(() => _voiceState = VoiceState.idle);
+                  }
+                });
+              }
             });
           },
         );
+      } else {
+        setState(() {
+          _isListening = false;
+          _voiceState = VoiceState.error;
+          Future.delayed(const Duration(milliseconds: 1600), () {
+            if (mounted && _voiceState == VoiceState.error) {
+              setState(() => _voiceState = VoiceState.idle);
+            }
+          });
+        });
       }
     } else {
-      setState(() => _isListening = false);
+      setState(() {
+        _isListening = false;
+        _voiceState = VoiceState.idle;
+      });
       _speech.stop();
     }
   }
@@ -403,6 +500,14 @@ class _CreateInvoiceScreenState extends ConsumerState<CreateInvoiceScreen> {
       discount: widget.invoiceToEdit?.discount ?? 0.0,
       notes: _notes,
       status: widget.invoiceToEdit?.status ?? 'pending',
+      milestones: _milestones,
+      clientViewedAt: widget.invoiceToEdit?.clientViewedAt,
+      clientViewCount: widget.invoiceToEdit?.clientViewCount ?? 0,
+      paymentProofRef: widget.invoiceToEdit?.paymentProofRef,
+      paymentProofDate: widget.invoiceToEdit?.paymentProofDate,
+      paymentProofNote: widget.invoiceToEdit?.paymentProofNote,
+      paymentProofStatus: widget.invoiceToEdit?.paymentProofStatus,
+      paymentProofImage: widget.invoiceToEdit?.paymentProofImage,
     );
 
     if (widget.invoiceToEdit != null) {
@@ -483,7 +588,13 @@ class _CreateInvoiceScreenState extends ConsumerState<CreateInvoiceScreen> {
                       ],
                     ),
                     GestureDetector(
-                      onTap: () => Navigator.pop(context),
+                      onTap: () {
+                        if (widget.isBottomSheet) {
+                          Navigator.pop(context);
+                        } else {
+                          safeNavigateBack(context, fallbackRoute: '/dashboard');
+                        }
+                      },
                       child: Container(
                         width: 36,
                         height: 36,
@@ -510,7 +621,38 @@ class _CreateInvoiceScreenState extends ConsumerState<CreateInvoiceScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // ── 1. Client Card (From Old Design) ──
-                  const Text('Client / Recipient', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Client / Recipient', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+                      GestureDetector(
+                        onTap: () async {
+                          final contact = await DeviceContactPickerSheet.show(context);
+                          if (contact != null) {
+                            final newClient = contact.toClient();
+                            ref.read(clientProvider.notifier).addClient(newClient);
+                            setState(() => _selectedClient = newClient);
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEFF6FF),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFBFDBFE)),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.contacts_rounded, size: 12, color: Color(0xFF2563EB)),
+                              SizedBox(width: 4),
+                              Text('From Contacts', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF2563EB))),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 8),
 
                   GestureDetector(
@@ -753,95 +895,140 @@ class _CreateInvoiceScreenState extends ConsumerState<CreateInvoiceScreen> {
                       ),
                     )
                   else
-                    for (int i = 0; i < _items.length; i++) ...[
-                      Container(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    _items[i].name,
-                                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5, color: Color(0xFF0F172A)),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    '${currencyFormat.format(_items[i].price)} each',
-                                    style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                                  ),
-                                ],
+                    AnimatedSize(
+                      duration: const Duration(milliseconds: 240),
+                      curve: Curves.easeOutCubic,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          for (int i = 0; i < _items.length; i++)
+                            Dismissible(
+                              key: ValueKey('item_${_items[i].id}_$i'),
+                              direction: DismissDirection.endToStart,
+                              background: Container(
+                                margin: const EdgeInsets.only(bottom: 10),
+                                padding: const EdgeInsets.symmetric(horizontal: 18),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEF4444),
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                                alignment: Alignment.centerRight,
+                                child: const Icon(Icons.delete_outline_rounded, color: Colors.white, size: 22),
                               ),
-                            ),
+                              onDismissed: (_) {
+                                HapticFeedback.mediumImpact();
+                                final removed = _items[i];
+                                final removedIndex = i;
+                                setState(() => _items.removeAt(i));
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Removed ${removed.name}'),
+                                    behavior: SnackBarBehavior.floating,
+                                    duration: const Duration(seconds: 2),
+                                    action: SnackBarAction(
+                                      label: 'Undo',
+                                      textColor: const Color(0xFFFF5722),
+                                      onPressed: () {
+                                        setState(() => _items.insert(removedIndex, removed));
+                                      },
+                                    ),
+                                  ),
+                                );
+                              },
+                              child: Container(
+                                margin: const EdgeInsets.only(bottom: 10),
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            _items[i].name,
+                                            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5, color: Color(0xFF0F172A)),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            '${currencyFormat.format(_items[i].price)} each',
+                                            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
 
-                            // Quantity Stepper [-] Qty [+]
-                            Container(
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF8FAFC),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: const Color(0xFFE2E8F0)),
-                              ),
-                              child: Row(
-                                children: [
-                                  IconButton(
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                                    icon: const Icon(Icons.remove, size: 16, color: Color(0xFF0F172A)),
-                                    onPressed: () {
-                                      setState(() {
-                                        if (_items[i].quantity > 1) {
-                                          _items[i] = InvoiceItem(
-                                            id: _items[i].id,
-                                            name: _items[i].name,
-                                            price: _items[i].price,
-                                            quantity: _items[i].quantity - 1,
-                                          );
-                                        } else {
-                                          _items.removeAt(i);
-                                        }
-                                      });
-                                    },
-                                  ),
-                                  Text(
-                                    '${_items[i].quantity}',
-                                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: Color(0xFF0F172A)),
-                                  ),
-                                  IconButton(
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                                    icon: const Icon(Icons.add, size: 16, color: Color(0xFF0F172A)),
-                                    onPressed: () {
-                                      setState(() {
-                                        _items[i] = InvoiceItem(
-                                          id: _items[i].id,
-                                          name: _items[i].name,
-                                          price: _items[i].price,
-                                          quantity: _items[i].quantity + 1,
-                                        );
-                                      });
-                                    },
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 12),
+                                    // Quantity Stepper [-] Qty [+]
+                                    Container(
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF8FAFC),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          IconButton(
+                                            padding: EdgeInsets.zero,
+                                            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                            icon: const Icon(Icons.remove, size: 16, color: Color(0xFF0F172A)),
+                                            onPressed: () {
+                                              HapticFeedback.lightImpact();
+                                              setState(() {
+                                                if (_items[i].quantity > 1) {
+                                                  _items[i] = InvoiceItem(
+                                                    id: _items[i].id,
+                                                    name: _items[i].name,
+                                                    price: _items[i].price,
+                                                    quantity: _items[i].quantity - 1,
+                                                  );
+                                                } else {
+                                                  _items.removeAt(i);
+                                                }
+                                              });
+                                            },
+                                          ),
+                                          Text(
+                                            '${_items[i].quantity}',
+                                            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: Color(0xFF0F172A)),
+                                          ),
+                                          IconButton(
+                                            padding: EdgeInsets.zero,
+                                            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                            icon: const Icon(Icons.add, size: 16, color: Color(0xFF0F172A)),
+                                            onPressed: () {
+                                              HapticFeedback.lightImpact();
+                                              setState(() {
+                                                _items[i] = InvoiceItem(
+                                                  id: _items[i].id,
+                                                  name: _items[i].name,
+                                                  price: _items[i].price,
+                                                  quantity: _items[i].quantity + 1,
+                                                );
+                                              });
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
 
-                            // Total for item
-                            Text(
-                              currencyFormat.format(_items[i].total),
-                              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14.5, color: Color(0xFF0F172A)),
+                                    // Total for item with animated currency
+                                    AnimatedCurrencyText(
+                                      value: _items[i].total,
+                                      formatter: currencyFormat,
+                                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14.5, color: Color(0xFF0F172A)),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                          ],
-                        ),
+                        ],
                       ),
-                    ],
+                    ),
 
                   const SizedBox(height: 16),
 
@@ -882,33 +1069,197 @@ class _CreateInvoiceScreenState extends ConsumerState<CreateInvoiceScreen> {
                       const SizedBox(width: 10),
 
                       // Voice Input Button
-                      GestureDetector(
+                      VoiceWaveformIndicator(
+                        state: _voiceState,
                         onTap: _listen,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          decoration: BoxDecoration(
-                            color: _isListening ? const Color(0xFFFFECE8) : Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: _isListening ? const Color(0xFFFF5722) : const Color(0xFFE2E8F0)),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 18),
+
+                  // ── 5. Payment Milestones & Deposit Tranches ──
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(5),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFF5722).withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.splitscreen_rounded, size: 14, color: Color(0xFFFF5722)),
                           ),
-                          child: Row(
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Payment Milestones & Tranches',
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+                          ),
+                        ],
+                      ),
+                      if (_milestones.isNotEmpty)
+                        GestureDetector(
+                          onTap: () {
+                            MilestoneConfigSheet.show(
+                              context,
+                              totalAmount: grandTotal,
+                              currencyCode: profile.currency.isNotEmpty ? profile.currency : 'USD',
+                              initialMilestones: _milestones,
+                              onSave: (list) {
+                                setState(() => _milestones = list);
+                              },
+                            );
+                          },
+                          child: const Text(
+                            'Edit Tranches',
+                            style: TextStyle(color: Color(0xFFFF5722), fontWeight: FontWeight.bold, fontSize: 12.5),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
+                  if (_milestones.isEmpty)
+                    GestureDetector(
+                      onTap: () {
+                        if (grandTotal <= 0) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Add at least one line item before setting up milestones.')),
+                          );
+                          return;
+                        }
+                        MilestoneConfigSheet.show(
+                          context,
+                          totalAmount: grandTotal,
+                          currencyCode: profile.currency.isNotEmpty ? profile.currency : 'USD',
+                          onSave: (list) {
+                            setState(() => _milestones = list);
+                          },
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF1F5F9),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Icon(Icons.pie_chart_outline_rounded, color: Color(0xFF64748B), size: 20),
+                            ),
+                            const SizedBox(width: 14),
+                            const Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Single Full Payment (Default)',
+                                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5, color: Color(0xFF0F172A)),
+                                  ),
+                                  SizedBox(height: 2),
+                                  Text(
+                                    'Tap to split into milestone tranches (e.g. 50% deposit, 50% final)',
+                                    style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const Icon(Icons.chevron_right_rounded, color: Color(0xFF94A3B8)),
+                          ],
+                        ),
+                      ),
+                    )
+                  else
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFFF5722).withValues(alpha: 0.3)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFFF5722).withValues(alpha: 0.04),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Icon(_isListening ? Icons.mic : Icons.mic_none_rounded, size: 18, color: _isListening ? const Color(0xFFFF5722) : const Color(0xFF64748B)),
-                              const SizedBox(width: 6),
                               Text(
-                                _isListening ? 'Listening...' : 'Voice',
-                                style: TextStyle(
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.bold,
-                                  color: _isListening ? const Color(0xFFFF5722) : const Color(0xFF0F172A),
+                                '${_milestones.length} Tranches Configured',
+                                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Color(0xFF0F172A)),
+                              ),
+                              GestureDetector(
+                                onTap: () => setState(() => _milestones.clear()),
+                                child: const Text(
+                                  'Reset to Single',
+                                  style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFFEF4444)),
                                 ),
                               ),
                             ],
                           ),
-                        ),
+                          const SizedBox(height: 12),
+                          ..._milestones.asMap().entries.map((entry) {
+                            final idx = entry.key;
+                            final m = entry.value;
+                            return Container(
+                              margin: EdgeInsets.only(bottom: idx == _milestones.length - 1 ? 0 : 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF8FAFC),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: const Color(0xFFE2E8F0)),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFFF5722).withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      '${m.percentage.toStringAsFixed(0)}%',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w900,
+                                        color: Color(0xFFFF5722),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      m.title,
+                                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF0F172A)),
+                                    ),
+                                  ),
+                                  Text(
+                                    currencyFormat.format(m.amount),
+                                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Color(0xFF0F172A)),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
 
                   const SizedBox(height: 20),
                 ],
@@ -940,8 +1291,9 @@ class _CreateInvoiceScreenState extends ConsumerState<CreateInvoiceScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text('Total Payable', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5, color: Color(0xFF64748B))),
-                      Text(
-                        currencyFormat.format(grandTotal),
+                      AnimatedCurrencyText(
+                        value: grandTotal,
+                        formatter: currencyFormat,
                         style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 22, color: Color(0xFF0F172A), letterSpacing: -0.4),
                       ),
                     ],
@@ -970,6 +1322,7 @@ class _CreateInvoiceScreenState extends ConsumerState<CreateInvoiceScreen> {
                                 dueDate: _dueDate,
                                 status: 'pending',
                                 notes: _notes,
+                                milestones: _milestones,
                               );
                               await PdfService.shareInvoice(tempInvoice, profile);
                             },

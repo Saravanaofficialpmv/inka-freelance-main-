@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/constants/colors.dart';
+import '../../core/utils/navigation_utils.dart';
 import '../../core/localization/app_localizations.dart';
 
 class PrivacyPolicyScreen extends StatelessWidget {
@@ -15,7 +16,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
         scrolledUnderElevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary, size: 20),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => safeNavigateBack(context, fallbackRoute: '/profile'),
         ),
         title: Text(
           AppLocalizations.of(context)?.translate('privacy_policy') ?? 'Privacy Policy',

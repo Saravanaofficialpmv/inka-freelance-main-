@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models/business_profile.dart';
 import '../../services/currency_tax_service.dart';
+import '../../services/currency_conversion_service.dart';
 import '../providers/profile_provider.dart';
 import 'app_search_bar.dart';
 
@@ -14,6 +15,7 @@ class CurrencySelectionBottomSheet extends StatefulWidget {
   static Future<void> show(BuildContext context, BusinessProfile profile) {
     return showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => CurrencySelectionBottomSheet(profile: profile),
@@ -117,11 +119,28 @@ class _CurrencySelectionBottomSheetState extends State<CurrencySelectionBottomSh
                         ),
                       ),
                       child: ListTile(
-                        onTap: () {
-                          ref.read(profileProvider.notifier).updateProfile(
-                                widget.profile.copyWith(currency: curr.code),
-                              );
-                          Navigator.of(context).pop();
+                        onTap: () async {
+                          if (isSelected) {
+                            Navigator.of(context).pop();
+                            return;
+                          }
+                          final oldCurrency = widget.profile.currency;
+                          final recordCounts = CurrencyConversionService.getExistingRecordCounts();
+                          final totalRecords = recordCounts.values.fold<int>(0, (sum, count) => sum + count);
+                          if (totalRecords > 0) {
+                            await CurrencyConversionService.convertAllData(
+                              fromCurrency: oldCurrency,
+                              toCurrency: curr.code,
+                              ref: ref,
+                            );
+                          } else {
+                            await ref.read(profileProvider.notifier).updateProfile(
+                                  widget.profile.copyWith(currency: curr.code),
+                                );
+                          }
+                          if (context.mounted) {
+                            Navigator.of(context).pop();
+                          }
                         },
                         leading: CircleAvatar(
                           backgroundColor: Colors.white,
@@ -165,6 +184,7 @@ class TaxSettingsBottomSheet extends ConsumerStatefulWidget {
   static Future<void> show(BuildContext context, BusinessProfile profile) {
     return showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => TaxSettingsBottomSheet(profile: profile),

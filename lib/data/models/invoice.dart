@@ -1,6 +1,7 @@
 import 'package:hive/hive.dart';
 import 'client.dart';
 import 'invoice_item.dart';
+import 'payment_milestone.dart';
 
 part 'invoice.g.dart';
 
@@ -32,6 +33,22 @@ class Invoice extends HiveObject {
   final String recurringInterval; // 'weekly', 'monthly', 'quarterly', 'yearly'
   @HiveField(12)
   final DateTime? nextRecurringDate;
+  @HiveField(13)
+  final DateTime? clientViewedAt;
+  @HiveField(14)
+  final int clientViewCount;
+  @HiveField(15)
+  final String? paymentProofRef;
+  @HiveField(16)
+  final DateTime? paymentProofDate;
+  @HiveField(17)
+  final String? paymentProofNote;
+  @HiveField(18)
+  final String? paymentProofStatus; // 'submitted', 'verified', 'rejected'
+  @HiveField(19)
+  final String? paymentProofImage;
+  @HiveField(20)
+  final List<PaymentMilestone> milestones;
 
   Invoice({
     required this.id,
@@ -47,12 +64,33 @@ class Invoice extends HiveObject {
     this.isRecurring = false,
     this.recurringInterval = 'monthly',
     this.nextRecurringDate,
+    this.clientViewedAt,
+    this.clientViewCount = 0,
+    this.paymentProofRef,
+    this.paymentProofDate,
+    this.paymentProofNote,
+    this.paymentProofStatus,
+    this.paymentProofImage,
+    this.milestones = const [],
   });
 
   double get subtotal => items.fold(0.0, (sum, item) => sum + item.total);
   double get taxAmount => subtotal * (taxPercentage / 100);
   double get total => subtotal + taxAmount - discount;
   bool get isPaid => status.toLowerCase() == 'paid';
+
+  bool get hasMilestones => milestones.isNotEmpty;
+  List<PaymentMilestone> get paidMilestones => milestones.where((m) => m.isPaid).toList();
+  PaymentMilestone? get activeMilestone => milestones.isEmpty
+      ? null
+      : milestones.firstWhere(
+          (m) => m.isActive,
+          orElse: () => milestones.firstWhere((m) => m.isPending, orElse: () => milestones.last),
+        );
+  double get milestonesTotalPaid =>
+      milestones.where((m) => m.isPaid).fold<double>(0.0, (sum, m) => sum + m.amount);
+  double get milestonesRemaining => (total - milestonesTotalPaid).clamp(0.0, double.infinity);
+  bool get hasPaymentProof => paymentProofStatus != null && paymentProofStatus != 'rejected';
 
   Invoice copyWith({
     String? id,
@@ -68,6 +106,14 @@ class Invoice extends HiveObject {
     bool? isRecurring,
     String? recurringInterval,
     DateTime? nextRecurringDate,
+    DateTime? clientViewedAt,
+    int? clientViewCount,
+    String? paymentProofRef,
+    DateTime? paymentProofDate,
+    String? paymentProofNote,
+    String? paymentProofStatus,
+    String? paymentProofImage,
+    List<PaymentMilestone>? milestones,
   }) {
     return Invoice(
       id: id ?? this.id,
@@ -83,6 +129,14 @@ class Invoice extends HiveObject {
       isRecurring: isRecurring ?? this.isRecurring,
       recurringInterval: recurringInterval ?? this.recurringInterval,
       nextRecurringDate: nextRecurringDate ?? this.nextRecurringDate,
+      clientViewedAt: clientViewedAt ?? this.clientViewedAt,
+      clientViewCount: clientViewCount ?? this.clientViewCount,
+      paymentProofRef: paymentProofRef ?? this.paymentProofRef,
+      paymentProofDate: paymentProofDate ?? this.paymentProofDate,
+      paymentProofNote: paymentProofNote ?? this.paymentProofNote,
+      paymentProofStatus: paymentProofStatus ?? this.paymentProofStatus,
+      paymentProofImage: paymentProofImage ?? this.paymentProofImage,
+      milestones: milestones ?? this.milestones,
     );
   }
 
@@ -101,6 +155,14 @@ class Invoice extends HiveObject {
       'isRecurring': isRecurring,
       'recurringInterval': recurringInterval,
       'nextRecurringDate': nextRecurringDate?.millisecondsSinceEpoch,
+      'clientViewedAt': clientViewedAt?.millisecondsSinceEpoch,
+      'clientViewCount': clientViewCount,
+      'paymentProofRef': paymentProofRef,
+      'paymentProofDate': paymentProofDate?.millisecondsSinceEpoch,
+      'paymentProofNote': paymentProofNote,
+      'paymentProofStatus': paymentProofStatus,
+      'paymentProofImage': paymentProofImage,
+      'milestones': milestones.map((x) => x.toMap()).toList(),
     };
   }
 
@@ -109,7 +171,7 @@ class Invoice extends HiveObject {
       id: map['id'] ?? '',
       invoiceNumber: map['invoiceNumber'] ?? '',
       client: Client.fromMap(map['client']),
-      items: List<InvoiceItem>.from(map['items']?.map((x) => InvoiceItem.fromMap(x))),
+      items: List<InvoiceItem>.from(map['items']?.map((x) => InvoiceItem.fromMap(x)) ?? []),
       issueDate: DateTime.fromMillisecondsSinceEpoch(map['issueDate']),
       dueDate: DateTime.fromMillisecondsSinceEpoch(map['dueDate']),
       taxPercentage: map['taxPercentage']?.toDouble() ?? 0.0,
@@ -121,6 +183,21 @@ class Invoice extends HiveObject {
       nextRecurringDate: map['nextRecurringDate'] != null
           ? DateTime.fromMillisecondsSinceEpoch(map['nextRecurringDate'])
           : null,
+      clientViewedAt: map['clientViewedAt'] != null
+          ? DateTime.fromMillisecondsSinceEpoch(map['clientViewedAt'])
+          : null,
+      clientViewCount: (map['clientViewCount'] as num?)?.toInt() ?? 0,
+      paymentProofRef: map['paymentProofRef'],
+      paymentProofDate: map['paymentProofDate'] != null
+          ? DateTime.fromMillisecondsSinceEpoch(map['paymentProofDate'])
+          : null,
+      paymentProofNote: map['paymentProofNote'],
+      paymentProofStatus: map['paymentProofStatus'],
+      paymentProofImage: map['paymentProofImage'],
+      milestones: (map['milestones'] as List?)
+              ?.map((x) => PaymentMilestone.fromMap(Map<String, dynamic>.from(x as Map)))
+              .toList() ??
+          const [],
     );
   }
 }

@@ -67,16 +67,14 @@ class TibsySliverRefreshControl extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(24),
                   border: Border.all(
                     color: isHighlighted
-                        ? const Color(0xFFFF5722)
+                        ? const Color(0xFF0F172A)
                         : const Color(0xFFE2E8F0),
-                    width: isHighlighted ? 1.5 : 1.0,
+                    width: isHighlighted ? 1.4 : 1.0,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: isHighlighted
-                          ? const Color(0xFFFF5722).withValues(alpha: 0.25)
-                          : Colors.black.withValues(alpha: 0.06),
-                      blurRadius: isHighlighted ? 14 : 8,
+                      color: Colors.black.withValues(alpha: 0.06),
+                      blurRadius: 8,
                       offset: const Offset(0, 3),
                     ),
                   ],
@@ -98,8 +96,8 @@ class TibsySliverRefreshControl extends ConsumerWidget {
                         fontSize: 12.5,
                         fontWeight: FontWeight.w800,
                         color: isHighlighted
-                            ? const Color(0xFFFF5722)
-                            : const Color(0xFF0F172A),
+                            ? const Color(0xFF0F172A)
+                            : const Color(0xFF64748B),
                         letterSpacing: -0.2,
                       ),
                     ),

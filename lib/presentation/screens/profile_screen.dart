@@ -1,13 +1,17 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:firebase_auth/firebase_auth.dart' show User;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/auth_provider.dart';
 import '../providers/profile_provider.dart';
-import '../../core/localization/app_localizations.dart';
-import '../providers/locale_provider.dart';
 import '../providers/subscription_provider.dart';
 import '../widgets/tibsy_refresh_icon.dart';
 import '../../core/constants/colors.dart';
+import '../../core/theme/theme_helper.dart';
+import '../../data/models/business_profile.dart';
+import '../../services/currency_tax_service.dart';
 
 enum _BadgeType { pro, advanced, beta, newItem }
 
@@ -21,9 +25,10 @@ class ProfileScreen extends ConsumerWidget {
     final displayName = user?.email?.split('@').first ?? 'User';
     final businessProfile = ref.watch(profileProvider);
     final subscription = ref.watch(subscriptionProvider);
+    final isWide = MediaQuery.sizeOf(context).width >= 900;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.scaffoldBg,
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -33,31 +38,7 @@ class ProfileScreen extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(20, 12, 16, 8),
               child: Row(
                 children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.12),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: AppColors.primary.withValues(alpha: 0.25),
-                        width: 1.5,
-                      ),
-                    ),
-                    child: Center(
-                      child: Text(
-                        (businessProfile.businessName.isNotEmpty
-                                ? businessProfile.businessName[0]
-                                : displayName[0])
-                            .toUpperCase(),
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                    ),
-                  ),
+                  _buildHeaderAvatar(context, user, businessProfile, displayName),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -90,41 +71,6 @@ class ProfileScreen extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.notifications_none_rounded, color: AppColors.textPrimary, size: 24),
-                    tooltip: 'Notifications',
-                    onPressed: () => _showNotificationsDialog(context),
-                  ),
-                  PopupMenuButton<String>(
-                    icon: const Icon(Icons.more_vert_rounded, color: AppColors.textPrimary, size: 22),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    onSelected: (val) {
-                      if (val == 'about') _showAdvancedSettings(context);
-                      if (val == 'logout') _showLogoutConfirmDialog(context, ref);
-                    },
-                    itemBuilder: (ctx) => [
-                      const PopupMenuItem(
-                        value: 'about',
-                        child: Row(
-                          children: [
-                            Icon(Icons.info_outline_rounded, size: 20, color: AppColors.textSecondary),
-                            SizedBox(width: 12),
-                            Text('About App', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'logout',
-                        child: Row(
-                          children: [
-                            Icon(Icons.logout_rounded, size: 20, color: AppColors.error),
-                            SizedBox(width: 12),
-                            Text('Logout', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: AppColors.error)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
                 ],
               ),
             ),
@@ -132,7 +78,7 @@ class ProfileScreen extends ConsumerWidget {
             // ── Scrollable Body with Pull to Refresh ──
             Expanded(
               child: TibsyPullToRefresh(
-                padding: const EdgeInsets.fromLTRB(20, 6, 20, 120),
+                padding: EdgeInsets.fromLTRB(20, 6, 20, isWide ? 32 : 120),
                 onRefresh: () => syncAndRefreshEntireApp(ref),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -161,12 +107,12 @@ class ProfileScreen extends ConsumerWidget {
                         margin: const EdgeInsets.only(bottom: 16),
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: context.cardBg,
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppColors.cardBorder),
+                          border: Border.all(color: context.cardBorder),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.03),
+                              color: Colors.black.withValues(alpha: context.isDarkMode ? 0.25 : 0.03),
                               blurRadius: 10,
                               offset: const Offset(0, 2),
                             ),
@@ -183,12 +129,12 @@ class ProfileScreen extends ConsumerWidget {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      const Text(
+                                      Text(
                                         'Profile Completed',
                                         style: TextStyle(
                                           fontSize: 15.5,
                                           fontWeight: FontWeight.bold,
-                                          color: AppColors.textPrimary,
+                                          color: context.textPrimary,
                                         ),
                                       ),
                                       const SizedBox(height: 3),
@@ -230,22 +176,22 @@ class ProfileScreen extends ConsumerWidget {
                                     if (missingBank)
                                       _ActionChip(
                                         label: '+ Bank',
-                                        onTap: () => context.push('/bank-details'),
+                                        onTap: () => context.go('/bank-details'),
                                       ),
                                     if (missingAddress)
                                       _ActionChip(
                                         label: '+ Address',
-                                        onTap: () => context.push('/company-details'),
+                                        onTap: () => context.go('/company-details'),
                                       ),
                                     if (missingSignature)
                                       _ActionChip(
                                         label: '+ Signature',
-                                        onTap: () => context.push('/signatures'),
+                                        onTap: () => context.go('/signatures'),
                                       ),
                                     if (missingCompany)
                                       _ActionChip(
                                         label: '+ Company',
-                                        onTap: () => context.push('/company-details'),
+                                        onTap: () => context.go('/company-details'),
                                       ),
                                   ],
                                 ),
@@ -261,31 +207,31 @@ class ProfileScreen extends ConsumerWidget {
                     _SectionCard(
                       children: [
                         _SettingsTile(
-                          iconAsset: 'profilepage_icon/building.png',
+                          iconAsset: 'assets/icons/profile/building.png',
                           title: 'Company Details',
                           subtitle: businessProfile.businessName.isNotEmpty
                               ? businessProfile.businessName
                               : 'Set up company name, address & tax info',
-                          onTap: () => context.push('/company-details'),
+                          onTap: () => context.go('/company-details'),
                         ),
                         _SettingsTile(
-                          iconAsset: 'profilepage_icon/bank-2.png',
+                          iconAsset: 'assets/icons/profile/bank-2.png',
                           title: 'Bank & UPI Details',
                           subtitle: (businessProfile.accountNo != null && businessProfile.accountNo!.isNotEmpty)
                               ? 'A/C: ****${businessProfile.accountNo!.length >= 4 ? businessProfile.accountNo!.substring(businessProfile.accountNo!.length - 4) : businessProfile.accountNo}'
                               : (businessProfile.upiId != null && businessProfile.upiId!.isNotEmpty)
                                   ? 'UPI: ${businessProfile.upiId}'
                                   : 'Add bank account and UPI QR code',
-                          onTap: () => context.push('/bank-details'),
+                          onTap: () => context.go('/bank-details'),
                         ),
                         _SettingsTile(
-                          iconAsset: 'profilepage_icon/digital-signature.png',
+                          iconAsset: 'assets/icons/profile/digital-signature.png',
                           title: 'Signatures & Stamps',
                           subtitle: (businessProfile.signatureUrl != null && businessProfile.signatureUrl!.isNotEmpty)
                               ? 'Digital signature configured'
                               : 'Draw or upload authorized signature',
                           isLast: true,
-                          onTap: () => context.push('/signatures'),
+                          onTap: () => context.go('/signatures'),
                         ),
                       ],
                     ),
@@ -295,29 +241,29 @@ class ProfileScreen extends ConsumerWidget {
                     _SectionCard(
                       children: [
                         _SettingsTile(
-                          iconAsset: 'profilepage_icon/tax-free.png',
+                          iconAsset: 'assets/icons/profile/tax-free.png',
                           title: 'Document Settings',
                           subtitle: 'Tax (${businessProfile.taxLabel.isNotEmpty ? businessProfile.taxLabel : "GST"} ${businessProfile.defaultTaxRate.toStringAsFixed(0)}%) & Currency (${businessProfile.currency})',
-                          onTap: () => context.push('/document-settings'),
+                          onTap: () => context.go('/document-settings'),
                         ),
                         _SettingsTile(
-                          iconAsset: 'profilepage_icon/paper.png',
+                          iconAsset: 'assets/icons/profile/paper.png',
                           title: 'Invoice Templates',
                           subtitle: '14 professional layout designs',
-                          onTap: () => context.push('/templates'),
+                          onTap: () => context.go('/templates'),
                         ),
                         _SettingsTile(
                           icon: Icons.menu_book_outlined,
                           title: 'Notes & Terms',
                           subtitle: 'Default payment terms and notes',
-                          onTap: () => context.push('/notes-terms'),
+                          onTap: () => context.go('/notes-terms'),
                         ),
                         _SettingsTile(
-                          iconAsset: 'profilepage_icon/inventory.png',
+                          iconAsset: 'assets/icons/profile/inventory.png',
                           title: 'Product Catalog',
                           subtitle: 'Manage items, inventory & pricing',
                           isLast: true,
-                          onTap: () => context.push('/products'),
+                          onTap: () => context.go('/products'),
                         ),
                       ],
                     ),
@@ -327,23 +273,24 @@ class ProfileScreen extends ConsumerWidget {
                     _SectionCard(
                       children: [
                         _SettingsTile(
-                          iconAsset: 'profilepage_icon/language.png',
-                          title: 'Language',
-                          subtitle: languages
-                              .firstWhere(
-                                (l) => l.code == ref.watch(localeProvider).languageCode,
-                                orElse: () => languages.first,
-                              )
-                              .name,
-                          onTap: () => context.push('/language-settings'),
+                          iconAsset: 'assets/icons/profile/exchange-rate.png',
+                          title: 'Currency',
+                          subtitle: '${CurrencyTaxService.findCurrency(businessProfile.currency).name} (${CurrencyTaxService.findCurrency(businessProfile.currency).symbol})',
+                          onTap: () => context.go('/currency-settings'),
                         ),
                         _SettingsTile(
-                          iconAsset: 'profilepage_icon/insurance.png',
+                          icon: Icons.translate_rounded,
+                          title: 'Language',
+                          subtitle: 'English, Tamil, Hindi, Spanish',
+                          onTap: () => context.go('/language-settings'),
+                        ),
+                        _SettingsTile(
+                          iconAsset: 'assets/icons/profile/insurance.png',
                           title: 'Subscription Plans',
                           subtitle: subscription.isPro ? 'Inka Pro Active' : 'Explore Pro & Subscription Plans',
                           badge: subscription.isPro ? _BadgeType.pro : null,
                           isLast: true,
-                          onTap: () => context.push('/subscription'),
+                          onTap: () => context.go('/subscription'),
                         ),
                       ],
                     ),
@@ -353,25 +300,37 @@ class ProfileScreen extends ConsumerWidget {
                     _SectionCard(
                       children: [
                         _SettingsTile(
-                          iconAsset: 'profilepage_icon/handshake.png',
+                          iconAsset: 'assets/icons/profile/handshake.png',
                           title: 'Help & Support',
                           subtitle: 'Contact via WhatsApp & Email',
-                          onTap: () => context.push('/help-support'),
+                          onTap: () => context.go('/help-support'),
                         ),
                         _SettingsTile(
-                          iconAsset: 'profilepage_icon/policy-privacy.png',
+                          iconAsset: 'assets/icons/profile/policy-privacy.png',
                           title: 'Privacy Policy',
                           subtitle: 'Data protection and security',
-                          onTap: () => context.push('/privacy-policy'),
+                          onTap: () => context.go('/privacy-policy'),
                         ),
                         _SettingsTile(
-                          iconAsset: 'profilepage_icon/exit.png',
-                          iconColor: AppColors.error,
-                          titleColor: AppColors.error,
+                          iconAsset: 'assets/icons/profile/exit.png',
                           title: 'Logout',
                           subtitle: 'Sign out of your account',
-                          isLast: true,
                           onTap: () => _showLogoutConfirmDialog(context, ref),
+                        ),
+                        _SettingsTile(
+                          icon: Icons.delete_forever_rounded,
+                          iconColor: AppColors.error,
+                          titleColor: AppColors.error,
+                          title: 'Delete Account',
+                          subtitle: 'Permanently delete account and all data',
+                          isLast: true,
+                          onTap: () => _showDeleteAccountDialog(
+                            context,
+                            ref,
+                            businessProfile.businessName.trim().isNotEmpty
+                                ? businessProfile.businessName.trim()
+                                : displayName,
+                          ),
                         ),
                       ],
                     ),
@@ -418,53 +377,10 @@ class ProfileScreen extends ConsumerWidget {
 
   // ── Authentic Modal Sheets & Dialogs ──
 
-  void _showNotificationsDialog(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      useRootNavigator: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Notifications',
-                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                ),
-                IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
-              ],
-            ),
-            const SizedBox(height: 12),
-            const _NotificationItem(
-              icon: Icons.cloud_done_rounded,
-              color: AppColors.success,
-              title: 'Offline Sync Active',
-              subtitle: 'All local invoices and expenses are safely synchronized.',
-              time: 'Just now',
-            ),
-            const _NotificationItem(
-              icon: Icons.verified_user_rounded,
-              color: AppColors.primary,
-              title: 'Security Verified',
-              subtitle: 'Bank and business details encrypted and stored securely.',
-              time: 'Protected',
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   void _showLogoutConfirmDialog(BuildContext context, WidgetRef ref) {
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogCtx) => AlertDialog(
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Logout', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
@@ -473,16 +389,18 @@ class ProfileScreen extends ConsumerWidget {
           style: TextStyle(color: AppColors.textSecondary),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.of(dialogCtx).pop(), child: const Text('Cancel')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.error,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.of(dialogCtx).pop();
               await ref.read(authProvider.notifier).signOut();
-              if (context.mounted) context.go('/auth');
+              if (context.mounted) {
+                context.go('/auth');
+              }
             },
             child: const Text('Sign Out', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
@@ -491,78 +409,326 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
+  void _showDeleteAccountDialog(
+    BuildContext context,
+    WidgetRef ref,
+    String requiredConfirmationName,
+  ) {
+    final expected = requiredConfirmationName.trim();
 
-  void _showAdvancedSettings(BuildContext context) {
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      useRootNavigator: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (context) => Padding(
-        padding: const EdgeInsets.only(top: 24, bottom: 48),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              AppLocalizations.of(context)?.translate('advanced_settings') ?? 'Advanced Settings',
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-            ),
-            const SizedBox(height: 16),
-            ListTile(
-              leading: const Icon(Icons.info_outline, color: AppColors.textPrimary),
-              title: Text(
-                AppLocalizations.of(context)?.translate('about_app') ?? 'About App',
-                style: const TextStyle(color: AppColors.textPrimary),
-              ),
-              onTap: () {
-                Navigator.pop(context);
-                showDialog(
-                  context: context,
-                  builder: (_) => AlertDialog(
-                    backgroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    title: const Text('Inka', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
-                    content: Text(
-                      '${AppLocalizations.of(context)?.translate('version') ?? 'Version'} 1.0.0\nCreated using Flutter.',
-                      style: const TextStyle(color: AppColors.textSecondary),
+      barrierDismissible: false,
+      builder: (dialogCtx) {
+        String enteredName = '';
+        bool isDeleting = false;
+        String? errorMessage;
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final matches = enteredName.trim().toLowerCase() == expected.toLowerCase();
+
+            return AlertDialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+              actionsPadding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+              title: Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: AppColors.error.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
                     ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: Text(
-                          AppLocalizations.of(context)?.translate('close') ?? 'Close',
-                          style: const TextStyle(color: AppColors.primary),
+                    child: const Icon(
+                      Icons.delete_forever_rounded,
+                      color: AppColors.error,
+                      size: 26,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Delete Account',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimary,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'This action is permanent and cannot be undone. All your business records, invoices, clients, products, expenses, and signatures will be completely deleted from our database and this device.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.textSecondary,
+                        height: 1.45,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF2F2),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFFECACA)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Please enter your business name to confirm:',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF991B1B),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          SelectableText(
+                            expected,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF7F1D1D),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      key: const ValueKey('delete_account_confirm_field'),
+                      enabled: !isDeleting,
+                      autofocus: true,
+                      decoration: InputDecoration(
+                        hintText: 'Enter "$expected"',
+                        hintStyle: TextStyle(
+                          color: AppColors.textMuted.withValues(alpha: 0.7),
+                          fontSize: 13,
                         ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: AppColors.cardBorder),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color: matches ? AppColors.success : AppColors.error,
+                            width: 1.5,
+                          ),
+                        ),
+                        suffixIcon: matches
+                            ? const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 20)
+                            : null,
+                      ),
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                      onChanged: (val) {
+                        setDialogState(() {
+                          enteredName = val;
+                          errorMessage = null;
+                        });
+                      },
+                    ),
+                    if (errorMessage != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        errorMessage!,
+                        style: const TextStyle(color: AppColors.error, fontSize: 12, fontWeight: FontWeight.w500),
                       ),
                     ],
-                  ),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete_forever, color: AppColors.error),
-              title: Text(
-                AppLocalizations.of(context)?.translate('delete_account') ?? 'Delete Account',
-                style: const TextStyle(color: AppColors.error),
+                  ],
+                ),
               ),
-              onTap: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      AppLocalizations.of(context)?.translate('contact_support_delete') ??
-                          'Contact support to delete account.',
-                    ),
+              actions: [
+                TextButton(
+                  onPressed: isDeleting ? null : () => Navigator.of(dialogCtx).pop(),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w600),
                   ),
-                );
-              },
-            ),
-          ],
+                ),
+                ElevatedButton(
+                  key: const ValueKey('delete_account_confirm_btn'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.error,
+                    disabledBackgroundColor: AppColors.error.withValues(alpha: 0.35),
+                    elevation: matches && !isDeleting ? 2 : 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: (matches && !isDeleting)
+                      ? () async {
+                          setDialogState(() {
+                            isDeleting = true;
+                            errorMessage = null;
+                          });
+                          try {
+                            await ref.read(authProvider.notifier).deleteAccount();
+                            if (dialogCtx.mounted) {
+                              Navigator.of(dialogCtx).pop();
+                            }
+                            if (context.mounted) {
+                              context.go('/auth');
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Your account and all business records have been permanently deleted.'),
+                                  backgroundColor: AppColors.error,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (dialogCtx.mounted) {
+                              setDialogState(() {
+                                isDeleting = false;
+                                errorMessage = e.toString().replaceFirst('Exception: ', '');
+                              });
+                            }
+                          }
+                        }
+                      : null,
+                  child: isDeleting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text(
+                          'Permanently Delete',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildHeaderAvatar(
+    BuildContext context,
+    User? user,
+    BusinessProfile businessProfile,
+    String displayName,
+  ) {
+    return GestureDetector(
+      onTap: () => context.go('/company-details'),
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: AppColors.primary.withValues(alpha: 0.12),
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: AppColors.primary.withValues(alpha: 0.25),
+            width: 1.5,
+          ),
         ),
+        clipBehavior: Clip.antiAlias,
+        child: _buildAvatarImage(user, businessProfile, displayName),
       ),
     );
   }
 
+  Widget _buildAvatarImage(
+    User? user,
+    BusinessProfile businessProfile,
+    String displayName,
+  ) {
+    // 1. Business logo (uploaded in Company Details or Onboarding setup)
+    final logo = businessProfile.logoUrl?.trim();
+    if (logo != null && logo.isNotEmpty) {
+      if (logo.startsWith('http://') || logo.startsWith('https://')) {
+        return Image.network(
+          logo,
+          width: 44,
+          height: 44,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => _buildUserPhotoOrInitial(user, businessProfile, displayName),
+          loadingBuilder: (context, child, progress) {
+            if (progress == null) return child;
+            return _buildInitial(businessProfile, displayName);
+          },
+        );
+      } else if (!kIsWeb) {
+        try {
+          final file = File(logo);
+          if (file.existsSync()) {
+            return Image.file(
+              file,
+              width: 44,
+              height: 44,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => _buildUserPhotoOrInitial(user, businessProfile, displayName),
+            );
+          }
+        } catch (_) {}
+      }
+    }
+
+    // 2. User profile photo (Google / Firebase Auth)
+    return _buildUserPhotoOrInitial(user, businessProfile, displayName);
+  }
+
+  Widget _buildUserPhotoOrInitial(
+    User? user,
+    BusinessProfile businessProfile,
+    String displayName,
+  ) {
+    final photo = user?.photoURL?.trim();
+    if (photo != null && photo.isNotEmpty) {
+      return Image.network(
+        photo,
+        width: 44,
+        height: 44,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => _buildInitial(businessProfile, displayName),
+        loadingBuilder: (context, child, progress) {
+          if (progress == null) return child;
+          return _buildInitial(businessProfile, displayName);
+        },
+      );
+    }
+    return _buildInitial(businessProfile, displayName);
+  }
+
+  Widget _buildInitial(BusinessProfile businessProfile, String displayName) {
+    final initial = (businessProfile.businessName.isNotEmpty
+            ? businessProfile.businessName[0]
+            : (displayName.isNotEmpty ? displayName[0] : 'U'))
+        .toUpperCase();
+    return Center(
+      child: Text(
+        initial,
+        style: const TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w900,
+          color: AppColors.primary,
+        ),
+      ),
+    );
+  }
 }
 
 // ── Reusable Component Widgets ──
@@ -577,10 +743,10 @@ class _SectionHeader extends StatelessWidget {
       padding: const EdgeInsets.only(left: 4, bottom: 8, top: 18),
       child: Text(
         title,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.w800,
-          color: AppColors.textPrimary,
+          color: context.textPrimary,
           letterSpacing: -0.2,
         ),
       ),
@@ -596,12 +762,12 @@ class _SectionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.cardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.cardBorder),
+        border: Border.all(color: context.cardBorder),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
+            color: Colors.black.withValues(alpha: context.isDarkMode ? 0.25 : 0.02),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -637,7 +803,7 @@ class _SettingsTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final effectiveIconColor = iconColor ?? const Color(0xFF1E293B);
+    final effectiveIconColor = iconColor ?? (context.isDarkMode ? const Color(0xFFCBD5E1) : const Color(0xFF1E293B));
 
     Widget leadingWidget;
     if (iconAsset != null) {
@@ -675,7 +841,7 @@ class _SettingsTile extends StatelessWidget {
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 14.5,
-                    color: titleColor ?? AppColors.textPrimary,
+                    color: titleColor ?? context.textPrimary,
                     letterSpacing: -0.1,
                   ),
                 ),
@@ -689,15 +855,15 @@ class _SettingsTile extends StatelessWidget {
           subtitle: subtitle != null
               ? Text(
                   subtitle!,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
-                    color: AppColors.textSecondary,
+                    color: context.textSecondary,
                   ),
                 )
               : null,
-          trailing: const Icon(Icons.chevron_right, color: AppColors.textMuted, size: 20),
+          trailing: Icon(Icons.chevron_right, color: context.textMuted, size: 20),
         ),
-        if (!isLast) const Divider(height: 1, indent: 58, endIndent: 16, color: Color(0xFFF1F5F9)),
+        if (!isLast) Divider(height: 1, indent: 58, endIndent: 16, color: context.cardBorder),
       ],
     );
   }
@@ -784,52 +950,3 @@ class _ActionChip extends StatelessWidget {
   }
 }
 
-class _NotificationItem extends StatelessWidget {
-  final IconData icon;
-  final Color color;
-  final String title;
-  final String subtitle;
-  final String time;
-
-  const _NotificationItem({
-    required this.icon,
-    required this.color,
-    required this.title,
-    required this.subtitle,
-    required this.time,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: color.withValues(alpha: 0.12),
-            child: Icon(icon, color: color, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary)),
-                    Text(time, style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Text(subtitle, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

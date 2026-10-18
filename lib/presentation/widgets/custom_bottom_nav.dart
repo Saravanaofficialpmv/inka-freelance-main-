@@ -50,7 +50,7 @@ class CustomBottomNav extends StatelessWidget {
                 // 1. Home
                 Expanded(
                   child: _NavItem(
-                    iconAsset: 'nav_icons/home-4.png',
+                    iconAsset: 'assets/icons/nav/home-4.png',
                     label: 'Home',
                     isActive: currentIndex == 0,
                     onTap: () => GoRouter.of(context).go('/dashboard'),
@@ -60,7 +60,7 @@ class CustomBottomNav extends StatelessWidget {
                 // 2. Invoices
                 Expanded(
                   child: _NavItem(
-                    iconAsset: 'nav_icons/bill.png',
+                    iconAsset: 'assets/icons/nav/bill.png',
                     label: 'Invoices',
                     isActive: currentIndex == 1,
                     onTap: () => GoRouter.of(context).go('/history'),
@@ -70,7 +70,7 @@ class CustomBottomNav extends StatelessWidget {
                 // 3. Clients
                 Expanded(
                   child: _NavItem(
-                    iconAsset: 'nav_icons/rating.png',
+                    iconAsset: 'assets/icons/nav/rating.png',
                     label: 'Clients',
                     isActive: currentIndex == 2,
                     onTap: () => GoRouter.of(context).go('/clients-tab'),
@@ -80,7 +80,7 @@ class CustomBottomNav extends StatelessWidget {
                 // 4. Stats / Expenses
                 Expanded(
                   child: _NavItem(
-                    iconAsset: 'nav_icons/graph.png',
+                    iconAsset: 'assets/icons/nav/graph.png',
                     label: 'Stats',
                     isActive: currentIndex == 3,
                     onTap: () => GoRouter.of(context).go('/expenses'),
@@ -90,7 +90,7 @@ class CustomBottomNav extends StatelessWidget {
                 // 5. Settings
                 Expanded(
                   child: _NavItem(
-                    iconAsset: 'nav_icons/settings.png',
+                    iconAsset: 'assets/icons/nav/settings.png',
                     label: 'Settings',
                     isActive: currentIndex == 4,
                     onTap: () => GoRouter.of(context).go('/profile'),
@@ -153,14 +153,19 @@ class _NavItem extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Image.asset(
-              iconAsset,
-              width: 21,
-              height: 21,
-              color: itemColor,
-              colorBlendMode: BlendMode.srcIn,
-              semanticLabel: label,
-              filterQuality: FilterQuality.medium,
+            AnimatedScale(
+              scale: isActive ? 1.08 : 1.0,
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOutBack,
+              child: Image.asset(
+                iconAsset,
+                width: 21,
+                height: 21,
+                color: itemColor,
+                colorBlendMode: BlendMode.srcIn,
+                semanticLabel: label,
+                filterQuality: FilterQuality.medium,
+              ),
             ),
             const SizedBox(height: 3),
             FittedBox(

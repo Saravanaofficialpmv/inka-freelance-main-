@@ -85,6 +85,8 @@
 	<string>Inka needs access to your photo library to choose a business logo or signature.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Inka needs camera access to photograph business logos or receipts.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Inka accesses your contacts locally to suggest client details and enable searching contacts by name. Your contact data stays strictly on your device and is never uploaded or shared.</string>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>whatsapp</string>

@@ -7,6 +7,7 @@ import '../providers/profile_provider.dart';
 import '../viewmodels/expense_viewmodel.dart';
 import '../viewmodels/invoice_viewmodel.dart';
 import '../widgets/tibsy_refresh_icon.dart';
+import '../../core/theme/theme_helper.dart';
 
 class ExpensesScreen extends ConsumerStatefulWidget {
   const ExpensesScreen({super.key});
@@ -21,6 +22,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
   void _showAddExpenseModal([Expense? existingExpense]) {
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => _ExpenseFormBottomSheet(
@@ -51,78 +53,82 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
     final profitMargin = totalRevenue > 0 ? ((netProfit / totalRevenue) * 100) : 0.0;
 
     final sortedExpenses = expenses.reversed.toList();
+    final isWide = MediaQuery.sizeOf(context).width >= 900;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: context.scaffoldBg,
       body: SafeArea(
         child: Column(
           children: [
-            // ── Top Bar (Back, Title "Statistics", Add CTA) ──
+            // ── Top Bar (Back if canPop, Title "Statistics", Add CTA) ──
             Padding(
-              padding: const EdgeInsets.fromLTRB(20.0, 14.0, 20.0, 12.0),
+              padding: const EdgeInsets.fromLTRB(20.0, 12.0, 20.0, 12.0),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  if (Navigator.of(context).canPop())
-                    GestureDetector(
-                      onTap: () => Navigator.of(context).pop(),
-                      child: Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.04),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        if (Navigator.of(context).canPop())
+                          GestureDetector(
+                            onTap: () => Navigator.of(context).pop(),
+                            child: Container(
+                              width: 44,
+                              height: 44,
+                              margin: const EdgeInsets.only(right: 12),
+                              decoration: BoxDecoration(
+                                color: context.circleBtnBg,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: context.cardBorder, width: 1.2),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.04),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Icon(Icons.arrow_back_ios_new_rounded, color: context.textPrimary, size: 18),
                             ),
-                          ],
+                          ),
+                        Flexible(
+                          child: Text(
+                            'Statistics',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: context.textPrimary,
+                              fontSize: 26,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -0.6,
+                            ),
+                          ),
                         ),
-                        child: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF0F172A), size: 18),
-                      ),
-                    )
-                  else
-                    const SizedBox(width: 44),
-
-                  const Text(
-                    'Statistics',
-                    style: TextStyle(
-                      color: Color(0xFF0F172A),
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.3,
+                      ],
                     ),
                   ),
-
-                  Row(
-                    children: [
-                      GestureDetector(
-                        onTap: () => _showAddExpenseModal(),
-                        child: Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFFFF5722), Color(0xFFFF7A50)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFFFF5722).withValues(alpha: 0.35),
-                                blurRadius: 10,
-                                offset: const Offset(0, 3),
-                              ),
-                            ],
-                          ),
-                          child: const Icon(Icons.add_rounded, color: Colors.white, size: 24),
+                  GestureDetector(
+                    onTap: () => _showAddExpenseModal(),
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFFF5722), Color(0xFFFF7A50)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
                         ),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFFF5722).withValues(alpha: 0.35),
+                            blurRadius: 10,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
                       ),
-                    ],
+                      child: const Icon(Icons.add_rounded, color: Colors.white, size: 24),
+                    ),
                   ),
                 ],
               ),
@@ -131,19 +137,19 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
             // ── Scrollable Body ──
             Expanded(
               child: TibsyPullToRefresh(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 140),
+                padding: EdgeInsets.fromLTRB(20, 8, 20, isWide ? 32 : 140),
                 onRefresh: () => syncAndRefreshEntireApp(ref),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Section Title: "Over View"
+                    // Section Title: "Overview"
                     const Text(
-                      'Over View',
+                      'Overview',
                       style: TextStyle(
                         color: Color(0xFF0F172A),
-                        fontSize: 17,
+                        fontSize: 18,
                         fontWeight: FontWeight.w800,
-                        letterSpacing: -0.3,
+                        letterSpacing: -0.4,
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -175,104 +181,85 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                               color: Colors.white,
                               fontSize: 16,
                               fontWeight: FontWeight.w800,
+                              letterSpacing: -0.2,
                             ),
                           ),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 18),
                           Row(
                             children: [
                               // Paid
                               Expanded(
-                                child: Padding(
-                                  padding: const EdgeInsets.only(right: 8),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Text('Paid', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                                      const SizedBox(height: 4),
-                                      FittedBox(
-                                        fit: BoxFit.scaleDown,
-                                        alignment: Alignment.centerLeft,
-                                        child: Text(
-                                          currencyFormat.format(paidAmount),
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w900,
-                                          ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('Paid', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
+                                    const SizedBox(height: 6),
+                                    FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      alignment: Alignment.centerLeft,
+                                      child: Text(
+                                        currencyFormat.format(paidAmount),
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w800,
                                         ),
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                  ],
                                 ),
                               ),
 
-                              Container(width: 1, height: 36, color: Colors.white.withValues(alpha: 0.3)),
+                              Container(width: 1, height: 36, color: Colors.white.withValues(alpha: 0.25)),
+                              const SizedBox(width: 12),
 
                               // Unpaid
                               Expanded(
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Text('Unpaid', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                                      const SizedBox(height: 4),
-                                      FittedBox(
-                                        fit: BoxFit.scaleDown,
-                                        alignment: Alignment.centerLeft,
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Text(
-                                              currencyFormat.format(unpaidAmount),
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w900,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 4),
-                                            const Text('+3.4%', style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold)),
-                                          ],
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('Unpaid', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
+                                    const SizedBox(height: 6),
+                                    FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      alignment: Alignment.centerLeft,
+                                      child: Text(
+                                        currencyFormat.format(unpaidAmount),
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w800,
                                         ),
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                  ],
                                 ),
                               ),
 
-                              Container(width: 1, height: 36, color: Colors.white.withValues(alpha: 0.3)),
+                              const SizedBox(width: 12),
+                              Container(width: 1, height: 36, color: Colors.white.withValues(alpha: 0.25)),
+                              const SizedBox(width: 12),
 
                               // Overdue
                               Expanded(
-                                child: Padding(
-                                  padding: const EdgeInsets.only(left: 8),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Text('Overdue', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                                      const SizedBox(height: 4),
-                                      FittedBox(
-                                        fit: BoxFit.scaleDown,
-                                        alignment: Alignment.centerLeft,
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Text(
-                                              currencyFormat.format(overdueAmount),
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w900,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 4),
-                                            const Text('+4%', style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold)),
-                                          ],
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('Overdue', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
+                                    const SizedBox(height: 6),
+                                    FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      alignment: Alignment.centerLeft,
+                                      child: Text(
+                                        currencyFormat.format(overdueAmount),
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w800,
                                         ),
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
@@ -318,8 +305,8 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      const Text('Total Spent', style: TextStyle(color: Color(0xFF64748B), fontSize: 11.5, fontWeight: FontWeight.w600)),
-                                      const SizedBox(height: 2),
+                                      const Text('Total Spent', style: TextStyle(color: Color(0xFF64748B), fontSize: 12, fontWeight: FontWeight.w600)),
+                                      const SizedBox(height: 3),
                                       FittedBox(
                                         fit: BoxFit.scaleDown,
                                         alignment: Alignment.centerLeft,
@@ -327,7 +314,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                                           currencyFormat.format(totalExpenses),
                                           style: const TextStyle(
                                             color: Color(0xFF0F172A),
-                                            fontSize: 15.5,
+                                            fontSize: 16,
                                             fontWeight: FontWeight.w800,
                                           ),
                                         ),
@@ -366,9 +353,9 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                                     children: [
                                       Text(
                                         'Net Profit (${profitMargin.toStringAsFixed(0)}%)',
-                                        style: const TextStyle(color: Color(0xFF64748B), fontSize: 11.5, fontWeight: FontWeight.w600),
+                                        style: const TextStyle(color: Color(0xFF64748B), fontSize: 12, fontWeight: FontWeight.w600),
                                       ),
-                                      const SizedBox(height: 2),
+                                      const SizedBox(height: 3),
                                       FittedBox(
                                         fit: BoxFit.scaleDown,
                                         alignment: Alignment.centerLeft,
@@ -376,7 +363,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                                           currencyFormat.format(netProfit),
                                           style: TextStyle(
                                             color: netProfit >= 0 ? const Color(0xFF10B981) : const Color(0xFFEF4444),
-                                            fontSize: 15.5,
+                                            fontSize: 16,
                                             fontWeight: FontWeight.w800,
                                           ),
                                         ),
@@ -415,35 +402,40 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    currencyFormat.format(totalRevenue),
-                                    style: const TextStyle(
-                                      color: Color(0xFF0F172A),
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.w900,
-                                      letterSpacing: -0.5,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFECFDF5),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: const Text(
-                                      '+2.1%',
-                                      style: TextStyle(
-                                        color: Color(0xFF10B981),
-                                        fontSize: 11.5,
-                                        fontWeight: FontWeight.w700,
+                              Expanded(
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        currencyFormat.format(totalRevenue),
+                                        style: const TextStyle(
+                                          color: Color(0xFF0F172A),
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.w900,
+                                          letterSpacing: -0.5,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
-                                  ),
-                                ],
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFECFDF5),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: const Text(
+                                        '+2.1%',
+                                        style: TextStyle(
+                                          color: Color(0xFF10B981),
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
 
                               // Timeframe dropdown selector
@@ -451,21 +443,21 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFFFF0EB),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: const Color(0xFFFF5722).withValues(alpha: 0.2)),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: const Color(0xFFFF5722).withValues(alpha: 0.25)),
                                 ),
                                 child: DropdownButton<String>(
                                   value: _selectedTimeframe,
                                   underline: const SizedBox(),
                                   dropdownColor: Colors.white,
-                                  icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFFFF5722), size: 18),
+                                  icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFFFF5722), size: 16),
                                   isDense: true,
                                   items: ['Weekly', 'Monthly', 'Yearly'].map((t) {
                                     return DropdownMenuItem<String>(
                                       value: t,
                                       child: Text(
                                         t,
-                                        style: const TextStyle(color: Color(0xFF0F172A), fontSize: 12, fontWeight: FontWeight.bold),
+                                        style: const TextStyle(color: Color(0xFF0F172A), fontSize: 12.5, fontWeight: FontWeight.w700),
                                       ),
                                     );
                                   }).toList(),
@@ -489,11 +481,11 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text('60k', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
-                                    Text('45k', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
-                                    Text('30k', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
-                                    Text('15k', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
-                                    Text('0k', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
+                                    Text('60k', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w500)),
+                                    Text('45k', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w500)),
+                                    Text('30k', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w500)),
+                                    Text('15k', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w500)),
+                                    Text('0k', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w500)),
                                   ],
                                 ),
                                 const SizedBox(width: 10),
@@ -509,17 +501,26 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                                         ),
                                       ),
                                       const SizedBox(height: 8),
-                                      const Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Text('Jan', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5)),
-                                          Text('Feb', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5)),
-                                          Text('Mar', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5)),
-                                          Text('Apr', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5)),
-                                          Text('Jun', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5)),
-                                          Text('Jul', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5)),
-                                          Text('Aug', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5)),
-                                        ],
+                                      FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: const [
+                                            Text('Jan', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5, fontWeight: FontWeight.w500)),
+                                            SizedBox(width: 14),
+                                            Text('Feb', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5, fontWeight: FontWeight.w500)),
+                                            SizedBox(width: 14),
+                                            Text('Mar', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5, fontWeight: FontWeight.w500)),
+                                            SizedBox(width: 14),
+                                            Text('Apr', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5, fontWeight: FontWeight.w500)),
+                                            SizedBox(width: 14),
+                                            Text('Jun', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5, fontWeight: FontWeight.w500)),
+                                            SizedBox(width: 14),
+                                            Text('Jul', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5, fontWeight: FontWeight.w500)),
+                                            SizedBox(width: 14),
+                                            Text('Aug', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5, fontWeight: FontWeight.w500)),
+                                          ],
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -537,23 +538,43 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
-                          'Top Spending',
-                          style: TextStyle(
-                            color: Color(0xFF0F172A),
-                            fontSize: 17,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.3,
+                        const Expanded(
+                          child: Text(
+                            'Top Spending',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Color(0xFF0F172A),
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.4,
+                            ),
                           ),
                         ),
+                        const SizedBox(width: 8),
                         GestureDetector(
                           onTap: () => _showAddExpenseModal(),
-                          child: const Text(
-                            '+ Add Expense',
-                            style: TextStyle(
-                              color: Color(0xFFFF5722),
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFF0EB),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: const Color(0xFFFF5722).withValues(alpha: 0.25)),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.add_rounded, size: 15, color: Color(0xFFFF5722)),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Add Expense',
+                                  style: TextStyle(
+                                    color: Color(0xFFFF5722),
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
@@ -626,8 +647,8 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                                         expense.title.isNotEmpty ? expense.title : expense.category,
                                         style: const TextStyle(
                                           color: Color(0xFF0F172A),
-                                          fontSize: 14.5,
-                                          fontWeight: FontWeight.bold,
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w700,
                                         ),
                                       ),
                                       const SizedBox(height: 2),
@@ -636,6 +657,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                                         style: const TextStyle(
                                           color: Color(0xFF64748B),
                                           fontSize: 12,
+                                          fontWeight: FontWeight.w500,
                                         ),
                                       ),
                                     ],
@@ -647,8 +669,8 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                                   currencyFormat.format(expense.amount),
                                   style: const TextStyle(
                                     color: Color(0xFF0F172A),
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w800,
                                   ),
                                 ),
                               ],
@@ -880,7 +902,12 @@ class _ExpenseFormBottomSheetState extends ConsumerState<_ExpenseFormBottomSheet
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
       ),
-      padding: EdgeInsets.fromLTRB(24, 20, 24, MediaQuery.of(context).viewInsets.bottom + 24),
+      padding: EdgeInsets.fromLTRB(
+        24,
+        20,
+        24,
+        MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).padding.bottom + 24,
+      ),
       child: Form(
         key: _formKey,
         child: SingleChildScrollView(
@@ -964,34 +991,20 @@ class _ExpenseFormBottomSheetState extends ConsumerState<_ExpenseFormBottomSheet
               const SizedBox(height: 24),
 
               // Save Button
-              Container(
+              SizedBox(
                 width: double.infinity,
-                height: 54,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFFF5722), Color(0xFFFF7A50)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFFF5722).withValues(alpha: 0.35),
-                      blurRadius: 14,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
+                height: 52,
                 child: ElevatedButton(
                   onPressed: _save,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.transparent,
-                    shadowColor: Colors.transparent,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    backgroundColor: const Color(0xFFFF5722),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   ),
                   child: Text(
                     widget.expense != null ? 'Update Expense' : 'Save Expense',
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15),
                   ),
                 ),
               ),

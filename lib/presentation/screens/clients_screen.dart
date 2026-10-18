@@ -1,21 +1,17 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../data/models/client.dart';
-import '../../data/models/invoice.dart';
 import '../providers/client_provider.dart';
-import '../providers/profile_provider.dart';
-import '../viewmodels/invoice_viewmodel.dart';
-import '../../services/currency_tax_service.dart';
 import '../widgets/tibsy_refresh_icon.dart';
 import '../widgets/app_search_bar.dart';
 import '../widgets/highlighted_text.dart';
 import '../widgets/bouncing_button.dart';
 import '../widgets/search_empty_state.dart';
 import '../../services/contact_service.dart';
+import '../widgets/device_contact_picker_sheet.dart';
 import '../../core/utils/validators.dart';
+import '../../core/theme/theme_helper.dart';
 
 class ClientsScreen extends ConsumerStatefulWidget {
   final bool isSelectionMode;
@@ -27,7 +23,6 @@ class ClientsScreen extends ConsumerStatefulWidget {
 }
 
 class _ClientsScreenState extends ConsumerState<ClientsScreen> {
-  String _selectedFilter = 'Active';
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
 
@@ -46,6 +41,7 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
 
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
@@ -54,7 +50,7 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
           borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
         ),
         padding: EdgeInsets.only(
-          bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+          bottom: MediaQuery.of(ctx).viewInsets.bottom + MediaQuery.of(ctx).padding.bottom + 24,
           left: 20,
           right: 20,
           top: 16,
@@ -76,6 +72,70 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                 client == null ? 'Add New Client' : 'Edit Client',
                 style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
               ),
+              if (client == null) ...[
+                const SizedBox(height: 12),
+                InkWell(
+                  onTap: () async {
+                    final selected = await DeviceContactPickerSheet.show(context);
+                    if (selected != null) {
+                      nameController.text = selected.displayName;
+                      if (selected.primaryPhone.isNotEmpty) {
+                        phoneController.text = selected.primaryPhone;
+                      }
+                      if (selected.primaryEmail.isNotEmpty) {
+                        emailController.text = selected.primaryEmail;
+                      }
+                      if (selected.address != null && selected.address!.isNotEmpty) {
+                        addressController.text = selected.address!;
+                      }
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF2563EB).withValues(alpha: 0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.contacts_rounded, color: Color(0xFF2563EB), size: 18),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Import from Phone Contacts',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13.5,
+                                  color: Color(0xFF0F172A),
+                                ),
+                              ),
+                              SizedBox(height: 1),
+                              Text(
+                                'Auto-fill name, phone & email safely',
+                                style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.arrow_forward_ios_rounded, size: 13, color: Color(0xFF94A3B8)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 16),
               _buildModalInput('Client Name', 'e.g. Andi Permana', nameController, Icons.person_outline_rounded),
               const SizedBox(height: 12),
@@ -172,24 +232,7 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
   @override
   Widget build(BuildContext context) {
     final clients = ref.watch(clientProvider);
-    final invoices = ref.watch(invoiceProvider);
-    final profile = ref.watch(profileProvider);
-    final currencyFormat = CurrencyTaxService.getCurrencyFormatter(
-      currencyCode: profile.currency.isNotEmpty ? profile.currency : 'USD',
-      decimalDigits: 2,
-    );
-
-    // Calculate totals for Paid, Unpaid, Pending
-    final double paidTotal = invoices
-        .where((i) => i.status.toLowerCase() == 'paid')
-        .fold(0.0, (sum, i) => sum + i.total);
-    final double unpaidTotal = invoices
-        .where((i) => i.status.toLowerCase() == 'unpaid' || i.status.toLowerCase() == 'overdue')
-        .fold(0.0, (sum, i) => sum + i.total);
-    final double pendingTotal = invoices
-        .where((i) => i.status.toLowerCase() == 'pending')
-        .fold(0.0, (sum, i) => sum + i.total);
-    final double grandTotal = paidTotal + unpaidTotal + pendingTotal;
+    final isWide = MediaQuery.sizeOf(context).width >= 900;
 
     // Filtered clients list
     final filteredClients = clients.where((c) {
@@ -199,21 +242,13 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
         final matchesEmail = c.email.toLowerCase().contains(q);
         final matchesPhone = c.phone.toLowerCase().contains(q);
         final matchesAddress = c.address.toLowerCase().contains(q);
-        if (!matchesName && !matchesEmail && !matchesPhone && !matchesAddress) {
-          return false;
-        }
+        return matchesName || matchesEmail || matchesPhone || matchesAddress;
       }
-      if (_selectedFilter == 'Overdue') {
-        return invoices.any((i) => i.client.id == c.id && i.status.toLowerCase() == 'overdue');
-      } else if (_selectedFilter == 'High-Value') {
-        final clientTotal = invoices.where((i) => i.client.id == c.id).fold(0.0, (sum, i) => sum + i.total);
-        return clientTotal > 1000;
-      }
-      return true; // Active
+      return true;
     }).toList();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
+      backgroundColor: context.scaffoldBg,
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -229,36 +264,72 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        children: [
-                          if (widget.isSelectionMode) ...[
-                            GestureDetector(
-                              onTap: () => context.pop(),
-                              child: Container(
-                                width: 40,
-                                height: 40,
-                                margin: const EdgeInsets.only(right: 12),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                      Expanded(
+                        child: Row(
+                          children: [
+                            if (widget.isSelectionMode || Navigator.of(context).canPop()) ...[
+                              GestureDetector(
+                                onTap: () => context.pop(),
+                                child: Container(
+                                  width: 44,
+                                  height: 44,
+                                  margin: const EdgeInsets.only(right: 12),
+                                  decoration: BoxDecoration(
+                                    color: context.circleBtnBg,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: context.cardBorder, width: 1.2),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(alpha: 0.04),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: context.textPrimary),
                                 ),
-                                child: const Icon(Icons.arrow_back_ios_new_rounded, size: 16, color: Color(0xFF0F172A)),
+                              ),
+                            ],
+                            Expanded(
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      'My Clients',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 26,
+                                        fontWeight: FontWeight.w900,
+                                        color: context.textPrimary,
+                                        letterSpacing: -0.6,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3.5),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF1F5F9),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      '${clients.length}',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFF64748B),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
-                          const Text(
-                            'My Clients',
-                            style: TextStyle(
-                              fontSize: 26,
-                              fontWeight: FontWeight.w900,
-                              color: Color(0xFF0F172A),
-                              letterSpacing: -0.6,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
-                      BouncingButton(
+                      GestureDetector(
                         onTap: () => _showAddEditClientDialog(),
                         child: Container(
                           width: 44,
@@ -272,13 +343,13 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFFFF5722).withValues(alpha: 0.35),
-                                blurRadius: 10,
-                                offset: const Offset(0, 3),
+                                color: Colors.black.withValues(alpha: 0.12),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
                               ),
                             ],
                           ),
-                          child: const Icon(Icons.person_add_alt_1_rounded, size: 20, color: Colors.white),
+                          child: const Icon(Icons.add_rounded, size: 24, color: Colors.white),
                         ),
                       ),
                     ],
@@ -293,6 +364,48 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                     onChanged: (v) => setState(() => _searchQuery = v),
                     onClear: () => setState(() => _searchQuery = ''),
                   ),
+
+                  if (widget.isSelectionMode) ...[
+                    const SizedBox(height: 10),
+                    InkWell(
+                      onTap: () async {
+                        final contact = await DeviceContactPickerSheet.show(context);
+                        if (contact != null && context.mounted) {
+                          final newClient = contact.toClient();
+                          ref.read(clientProvider.notifier).addClient(newClient);
+                          context.pop(newClient);
+                        }
+                      },
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFEFF6FF), Color(0xFFDBEAFE)],
+                          ),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFFBFDBFE)),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.contacts_rounded, color: Color(0xFF2563EB), size: 18),
+                            SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'Select recipient from phone contacts',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                  color: Color(0xFF1D4ED8),
+                                ),
+                              ),
+                            ),
+                            Icon(Icons.arrow_forward_ios_rounded, size: 12, color: Color(0xFF2563EB)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -302,487 +415,285 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
             // ── Scrollable Body with Tibsy Pull-to-Refresh ──
             Expanded(
               child: TibsyPullToRefresh(
-                padding: const EdgeInsets.fromLTRB(20.0, 0, 20.0, 120.0),
+                padding: EdgeInsets.fromLTRB(20.0, 0, 20.0, isWide ? 32.0 : 120.0),
                 onRefresh: () => syncAndRefreshEntireApp(ref),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ── Top Financial Metric Row (Paid, Unpaid, Pending) ──
-              Row(
-                children: [
-                  _buildMetricItem('Paid', paidTotal > 0 ? paidTotal : 13100.0, currencyFormat),
-                  Container(width: 1, height: 32, color: const Color(0xFFE2E8F0)),
-                  _buildMetricItem('Unpaid', unpaidTotal > 0 ? unpaidTotal : 320.0, currencyFormat),
-                  Container(width: 1, height: 32, color: const Color(0xFFE2E8F0)),
-                  _buildMetricItem('Pending', pendingTotal > 0 ? pendingTotal : 5670.0, currencyFormat),
-                ],
-              ),
+                    // ── Client List / Empty State ──
+                    if (filteredClients.isEmpty)
+                      _searchQuery.trim().isNotEmpty
+                          ? SearchEmptyState(
+                              query: _searchQuery,
+                              itemType: 'clients',
+                              onClear: () {
+                                _searchController.clear();
+                                setState(() => _searchQuery = '');
+                              },
+                            )
+                          : Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(24),
+                                border: Border.all(color: const Color(0xFFE2E8F0)),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.02),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 56,
+                                    height: 56,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFFF5722).withValues(alpha: 0.1),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.group_add_outlined,
+                                      size: 28,
+                                      color: Color(0xFFFF5722),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 14),
+                                  const Text(
+                                    'No clients found',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w800,
+                                      color: Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  const Text(
+                                    'Add clients to organize contacts and create invoices faster.',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: 12.5,
+                                      color: Color(0xFF64748B),
+                                      height: 1.4,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 18),
+                                  BouncingButton(
+                                    onTap: () => _showAddEditClientDialog(),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFF5722),
+                                        borderRadius: BorderRadius.circular(14),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withValues(alpha: 0.12),
+                                            blurRadius: 6,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.add_rounded, size: 18, color: Colors.white),
+                                          SizedBox(width: 6),
+                                          Text(
+                                            'Add Client',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w800,
+                                              fontSize: 13.5,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                    else
+                      ListView.separated(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: filteredClients.length,
+                        separatorBuilder: (ctx, i) => const SizedBox(height: 10),
+                        itemBuilder: (ctx, index) {
+                          final client = filteredClients[index];
+                          return _buildClientCard(client);
+                        },
+                      ),
 
-              const SizedBox(height: 18),
-
-              // ── Donut Chart Card (From Mockup) ──
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(28),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.03),
-                      blurRadius: 16,
-                      offset: const Offset(0, 4),
-                    ),
+                    const SizedBox(height: 90),
                   ],
                 ),
-                child: SizedBox(
-                  height: 220,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // Custom Painted Donut Chart
-                      CustomPaint(
-                        size: const Size(200, 200),
-                        painter: _ClientDonutChartPainter(),
-                      ),
-
-                      // Center Text: "Total count" + "$19090.00"
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text(
-                            'Total count',
-                            style: TextStyle(fontSize: 13, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
-                          ),
-                          const SizedBox(height: 2),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.baseline,
-                            textBaseline: TextBaseline.alphabetic,
-                            children: [
-                              Text(
-                                currencyFormat.format(grandTotal > 0 ? grandTotal : 19090.0).split('.').first,
-                                style: const TextStyle(
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.w900,
-                                  color: Color(0xFF0F172A),
-                                  letterSpacing: -0.5,
-                                ),
-                              ),
-                              Text(
-                                '.00',
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF94A3B8),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-
-                      // Percentage Callout Badges
-                      // 10% Top Left (Charcoal)
-                      Positioned(
-                        top: 24,
-                        left: 36,
-                        child: _buildBadgeBubble('10%', const Color(0xFF1E2128)),
-                      ),
-
-                      // 30% Top Right (Vibrant Orange)
-                      Positioned(
-                        top: 32,
-                        right: 36,
-                        child: _buildBadgeBubble('30%', const Color(0xFFFF7A00)),
-                      ),
-
-                      // 60% Bottom Left (Dark Teal)
-                      Positioned(
-                        bottom: 30,
-                        left: 24,
-                        child: _buildBadgeBubble('60%', const Color(0xFF0D3B3E)),
-                      ),
-                    ],
-                  ),
-                ),
               ),
-
-              const SizedBox(height: 20),
-
-              // ── Filter Chips ──
-              Row(
-                children: [
-                  _buildFilterChip('Active'),
-                  const SizedBox(width: 8),
-                  _buildFilterChip('Overdue'),
-                  const SizedBox(width: 8),
-                  _buildFilterChip('High-Value'),
-                ],
-              ),
-
-              const SizedBox(height: 16),
-
-              // ── Client Cards Grid / List (From Mockup) ──
-              if (filteredClients.isEmpty)
-                _searchQuery.trim().isNotEmpty
-                    ? SearchEmptyState(
-                        query: _searchQuery,
-                        itemType: 'clients',
-                        onClear: () {
-                          _searchController.clear();
-                          setState(() => _searchQuery = '');
-                        },
-                      )
-                    : Container(
-                        padding: const EdgeInsets.all(32),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(22),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
-                        ),
-                        child: const Center(
-                          child: Text('No clients found in this category. Tap + to add one.', style: TextStyle(color: Color(0xFF94A3B8))),
-                        ),
-                      )
-              else
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                    childAspectRatio: 1.05,
-                  ),
-                  itemCount: filteredClients.length,
-                  itemBuilder: (ctx, index) {
-                    final client = filteredClients[index];
-                    final clientInvoices = invoices.where((i) => i.client.id == client.id).toList();
-                    final unpaidInvoices = clientInvoices.where((i) => i.status.toLowerCase() != 'paid').toList();
-                    final unpaidBalance = unpaidInvoices.fold<double>(0, (sum, i) => sum + i.total);
-
-                    return GestureDetector(
-                      onTap: () {
-                        if (widget.isSelectionMode) {
-                          context.pop(client);
-                        } else {
-                          context.push('/client-details', extra: client);
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(13),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(22),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.02),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                CircleAvatar(
-                                  radius: 18,
-                                  backgroundColor: const Color(0xFF0F172A),
-                                  child: Text(
-                                    client.name.isNotEmpty ? client.name[0].toUpperCase() : 'C',
-                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                                  ),
-                                ),
-                                _buildClientBalanceBadge(clientInvoices, unpaidBalance, currencyFormat),
-                              ],
-                            ),
-                            const Spacer(),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      HighlightedText(
-                                        text: client.name,
-                                        query: _searchQuery,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 13.5,
-                                          color: Color(0xFF0F172A),
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        '${clientInvoices.length} Invoices',
-                                        style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    GestureDetector(
-                                      onTap: () => ContactService.makeCall(context, client.phone),
-                                      child: Container(
-                                        width: 28,
-                                        height: 28,
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFFFECE8),
-                                          shape: BoxShape.circle,
-                                          border: Border.all(color: const Color(0xFFFF5722).withValues(alpha: 0.2)),
-                                        ),
-                                        child: const Icon(Icons.phone_rounded, size: 13.5, color: Color(0xFFFF5722)),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    GestureDetector(
-                                      onTap: () => ContactService.openWhatsApp(context, client.phone),
-                                      child: Container(
-                                        width: 28,
-                                        height: 28,
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFECFDF5),
-                                          shape: BoxShape.circle,
-                                          border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.2)),
-                                        ),
-                                        child: const Icon(Icons.chat_rounded, size: 13.5, color: Color(0xFF10B981)),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-
-              const SizedBox(height: 90),
-            ],
-          ),
-        ),
-      ),
-    ],
-  ),
-),
-);
-}
-
-  Widget _buildMetricItem(String title, double amount, dynamic currencyFormat) {
-    return Expanded(
-      child: Column(
-        children: [
-          Text(title, style: const TextStyle(color: Color(0xFF64748B), fontSize: 12, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 4),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                currencyFormat.format(amount).split('.').first,
-                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14.5, color: Color(0xFF0F172A)),
-              ),
-              const Text(
-                '.00',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF94A3B8)),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBadgeBubble(String text, Color bg) {
-    return Container(
-      width: 42,
-      height: 42,
-      decoration: BoxDecoration(
-        color: bg,
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.15),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Center(
-        child: Text(
-          text,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFilterChip(String label) {
-    final isSelected = _selectedFilter == label;
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        setState(() => _selectedFilter = label);
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF0F172A) : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isSelected ? const Color(0xFF0F172A) : const Color(0xFFE2E8F0),
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-            color: isSelected ? Colors.white : const Color(0xFF64748B),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildClientBalanceBadge(List<Invoice> clientInvoices, double unpaidBalance, dynamic currencyFormat) {
-    if (clientInvoices.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 7.5, vertical: 3),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF1F5F9),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
-        ),
-        child: const Text(
-          'New',
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF64748B),
-          ),
-        ),
-      );
-    }
-
-    if (unpaidBalance > 0) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 7.5, vertical: 3),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFFF1ED),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFFFF5722).withValues(alpha: 0.3)),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFFFF5722).withValues(alpha: 0.08),
-              blurRadius: 6,
-              offset: const Offset(0, 1),
             ),
           ],
         ),
-        child: Text(
-          '${currencyFormat.format(unpaidBalance)} Due',
-          style: const TextStyle(
-            fontSize: 9.5,
-            fontWeight: FontWeight.w800,
-            color: Color(0xFFFF5722),
-            letterSpacing: -0.2,
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7.5, vertical: 3),
-      decoration: BoxDecoration(
-        color: const Color(0xFFECFDF5),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF10B981).withValues(alpha: 0.08),
-            blurRadius: 6,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
-      child: const Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.check_circle_rounded, size: 10, color: Color(0xFF10B981)),
-          SizedBox(width: 3),
-          Text(
-            'All Clear',
-            style: TextStyle(
-              fontSize: 9.5,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF10B981),
-              letterSpacing: -0.2,
-            ),
-          ),
-        ],
       ),
     );
   }
-}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CUSTOM PAINTER FOR 3-SEGMENT DONUT CHART (60% Teal, 30% Orange, 10% Charcoal)
-// ─────────────────────────────────────────────────────────────────────────────
-class _ClientDonutChartPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = (size.width / 2) - 10;
-    const strokeWidth = 24.0;
-
-    final paintTeal = Paint()
-      ..color = const Color(0xFF0D3B3E)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
-
-    final paintOrange = Paint()
-      ..color = const Color(0xFFFF7A00)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
-
-    final paintCharcoal = Paint()
-      ..color = const Color(0xFF1E2128)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
-
-    final rect = Rect.fromCircle(center: center, radius: radius);
-
-    // Slices:
-    // 60% = 0.60 * 2pi = 3.77 rad (from 0.5 rad to ~4.2 rad)
-    // 30% = 0.30 * 2pi = 1.88 rad
-    // 10% = 0.10 * 2pi = 0.63 rad
-    canvas.drawArc(rect, -math.pi / 2 + 0.3, math.pi * 1.15, false, paintTeal);
-    canvas.drawArc(rect, math.pi * 0.75, math.pi * 0.55, false, paintOrange);
-    canvas.drawArc(rect, math.pi * 1.35, math.pi * 0.20, false, paintCharcoal);
+  Widget _buildClientCard(Client client) {
+    return GestureDetector(
+      onTap: () {
+        if (widget.isSelectionMode) {
+          context.pop(client);
+        } else {
+          context.push('/client-details', extra: client);
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 20,
+              backgroundColor: const Color(0xFF0F172A),
+              child: Text(
+                client.name.isNotEmpty ? client.name[0].toUpperCase() : 'C',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  HighlightedText(
+                    text: client.name,
+                    query: _searchQuery,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14.5,
+                      color: Color(0xFF0F172A),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (client.phone.isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        const Icon(Icons.phone_outlined, size: 12.5, color: Color(0xFF64748B)),
+                        const SizedBox(width: 5),
+                        Expanded(
+                          child: HighlightedText(
+                            text: client.phone,
+                            query: _searchQuery,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF64748B),
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (client.email.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        const Icon(Icons.email_outlined, size: 12.5, color: Color(0xFF94A3B8)),
+                        const SizedBox(width: 5),
+                        Expanded(
+                          child: HighlightedText(
+                            text: client.email,
+                            query: _searchQuery,
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              color: Color(0xFF94A3B8),
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (client.phone.isEmpty && client.email.isEmpty) ...[
+                    const SizedBox(height: 2),
+                    const Text(
+                      'No contact details',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: Color(0xFF94A3B8),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            if (client.phone.isNotEmpty) ...[
+              GestureDetector(
+                onTap: () => ContactService.makeCall(context, client.phone),
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFECE8),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: const Color(0xFFFF5722).withValues(alpha: 0.2)),
+                  ),
+                  child: const Icon(Icons.phone_rounded, size: 14, color: Color(0xFFFF5722)),
+                ),
+              ),
+              const SizedBox(width: 6),
+              GestureDetector(
+                onTap: () => ContactService.openWhatsApp(context, client.phone),
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFECFDF5),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.2)),
+                  ),
+                  child: const Icon(Icons.chat_rounded, size: 14, color: Color(0xFF10B981)),
+                ),
+              ),
+              const SizedBox(width: 6),
+            ],
+            Icon(
+              widget.isSelectionMode
+                  ? Icons.check_circle_outline_rounded
+                  : Icons.arrow_forward_ios_rounded,
+              size: widget.isSelectionMode ? 18 : 13,
+              color: const Color(0xFF94A3B8),
+            ),
+          ],
+        ),
+      ),
+    );
   }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 

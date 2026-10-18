@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/colors.dart';
+import '../../core/utils/navigation_utils.dart';
 import '../../core/localization/app_localizations.dart';
 import '../providers/profile_provider.dart';
 
@@ -62,7 +63,7 @@ class _NotesTermsScreenState extends ConsumerState<NotesTermsScreen> {
             behavior: SnackBarBehavior.floating,
           ),
         );
-        Navigator.pop(context);
+        safeNavigateBack(context, fallbackRoute: '/profile');
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -79,7 +80,7 @@ class _NotesTermsScreenState extends ConsumerState<NotesTermsScreen> {
         scrolledUnderElevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary, size: 20),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => safeNavigateBack(context, fallbackRoute: '/profile'),
         ),
         title: Text(
           AppLocalizations.of(context)?.translate('terms_conditions') ?? 'Notes & Terms',
