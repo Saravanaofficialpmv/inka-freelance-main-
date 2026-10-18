@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/theme/app_motion.dart';
 
 class CustomBottomNav extends StatelessWidget {
   final int currentIndex;
@@ -11,6 +12,7 @@ class CustomBottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).padding.bottom;
     final bottomMargin = bottomInset > 0 ? bottomInset + 4 : 16.0;
+    final bool reducedMotion = AppMotion.isReducedMotion(context);
 
     return Container(
       margin: EdgeInsets.fromLTRB(16, 0, 16, bottomMargin),
@@ -45,58 +47,101 @@ class CustomBottomNav extends StatelessWidget {
                 width: 1.2,
               ),
             ),
-            child: Row(
-              children: [
-                // 1. Home
-                Expanded(
-                  child: _NavItem(
-                    iconAsset: 'assets/icons/nav/home-4.png',
-                    label: 'Home',
-                    isActive: currentIndex == 0,
-                    onTap: () => GoRouter.of(context).go('/dashboard'),
-                  ),
-                ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                const int itemCount = 5;
+                final double totalWidth = constraints.maxWidth;
+                final double itemWidth = totalWidth / itemCount;
+                final bool hasActiveIndex = currentIndex >= 0 && currentIndex < itemCount;
 
-                // 2. Invoices
-                Expanded(
-                  child: _NavItem(
-                    iconAsset: 'assets/icons/nav/bill.png',
-                    label: 'Invoices',
-                    isActive: currentIndex == 1,
-                    onTap: () => GoRouter.of(context).go('/history'),
-                  ),
-                ),
+                return Stack(
+                  children: [
+                    // ── Smooth Sliding Active Indicator Pill ──
+                    if (hasActiveIndex)
+                      AnimatedPositioned(
+                        left: currentIndex * itemWidth,
+                        top: 0,
+                        bottom: 0,
+                        width: itemWidth,
+                        duration: reducedMotion ? Duration.zero : AppMotion.navigation,
+                        curve: AppMotion.entrance,
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.14),
+                            borderRadius: BorderRadius.circular(32),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.28),
+                              width: 1.0,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.white.withValues(alpha: 0.06),
+                                blurRadius: 6,
+                                offset: const Offset(0, 1),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
 
-                // 3. Clients
-                Expanded(
-                  child: _NavItem(
-                    iconAsset: 'assets/icons/nav/rating.png',
-                    label: 'Clients',
-                    isActive: currentIndex == 2,
-                    onTap: () => GoRouter.of(context).go('/clients-tab'),
-                  ),
-                ),
+                    // ── 5 Tab Navigation Items ──
+                    Row(
+                      children: [
+                        // 1. Home
+                        Expanded(
+                          child: _NavItem(
+                            iconAsset: 'assets/icons/nav/home-4.png',
+                            label: 'Home',
+                            isActive: currentIndex == 0,
+                            onTap: () => GoRouter.of(context).go('/dashboard'),
+                          ),
+                        ),
 
-                // 4. Stats / Expenses
-                Expanded(
-                  child: _NavItem(
-                    iconAsset: 'assets/icons/nav/graph.png',
-                    label: 'Stats',
-                    isActive: currentIndex == 3,
-                    onTap: () => GoRouter.of(context).go('/expenses'),
-                  ),
-                ),
+                        // 2. Invoices
+                        Expanded(
+                          child: _NavItem(
+                            iconAsset: 'assets/icons/nav/bill.png',
+                            label: 'Invoices',
+                            isActive: currentIndex == 1,
+                            onTap: () => GoRouter.of(context).go('/history'),
+                          ),
+                        ),
 
-                // 5. Settings
-                Expanded(
-                  child: _NavItem(
-                    iconAsset: 'assets/icons/nav/settings.png',
-                    label: 'Settings',
-                    isActive: currentIndex == 4,
-                    onTap: () => GoRouter.of(context).go('/profile'),
-                  ),
-                ),
-              ],
+                        // 3. Clients
+                        Expanded(
+                          child: _NavItem(
+                            iconAsset: 'assets/icons/nav/rating.png',
+                            label: 'Clients',
+                            isActive: currentIndex == 2,
+                            onTap: () => GoRouter.of(context).go('/clients-tab'),
+                          ),
+                        ),
+
+                        // 4. Stats / Expenses
+                        Expanded(
+                          child: _NavItem(
+                            iconAsset: 'assets/icons/nav/graph.png',
+                            label: 'Stats',
+                            isActive: currentIndex == 3,
+                            onTap: () => GoRouter.of(context).go('/expenses'),
+                          ),
+                        ),
+
+                        // 5. Settings
+                        Expanded(
+                          child: _NavItem(
+                            iconAsset: 'assets/icons/nav/settings.png',
+                            label: 'Settings',
+                            isActive: currentIndex == 4,
+                            onTap: () => GoRouter.of(context).go('/profile'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         ),
@@ -120,6 +165,7 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool reducedMotion = AppMotion.isReducedMotion(context);
     final itemColor = isActive ? Colors.white : Colors.white.withValues(alpha: 0.65);
 
     return GestureDetector(
@@ -128,56 +174,43 @@ class _NavItem extends StatelessWidget {
         onTap();
       },
       behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 240),
-        curve: Curves.easeOutCubic,
+      child: Container(
         padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 4),
-        decoration: BoxDecoration(
-          color: isActive ? Colors.white.withValues(alpha: 0.14) : Colors.transparent,
-          borderRadius: BorderRadius.circular(32),
-          border: Border.all(
-            color: isActive ? Colors.white.withValues(alpha: 0.28) : Colors.transparent,
-            width: 1.0,
-          ),
-          boxShadow: isActive
-              ? [
-                  BoxShadow(
-                    color: Colors.white.withValues(alpha: 0.06),
-                    blurRadius: 6,
-                    offset: const Offset(0, 1),
-                  ),
-                ]
-              : null,
-        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             AnimatedScale(
               scale: isActive ? 1.08 : 1.0,
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOutBack,
-              child: Image.asset(
-                iconAsset,
-                width: 21,
-                height: 21,
-                color: itemColor,
-                colorBlendMode: BlendMode.srcIn,
-                semanticLabel: label,
-                filterQuality: FilterQuality.medium,
+              duration: reducedMotion ? Duration.zero : AppMotion.iconTransition,
+              curve: AppMotion.subtleSpring,
+              child: AnimatedOpacity(
+                duration: reducedMotion ? Duration.zero : AppMotion.iconState,
+                opacity: isActive ? 1.0 : 0.65,
+                child: Image.asset(
+                  iconAsset,
+                  width: 21,
+                  height: 21,
+                  color: Colors.white,
+                  colorBlendMode: BlendMode.srcIn,
+                  semanticLabel: label,
+                  filterQuality: FilterQuality.medium,
+                ),
               ),
             ),
             const SizedBox(height: 3),
             FittedBox(
               fit: BoxFit.scaleDown,
-              child: Text(
-                label,
+              child: AnimatedDefaultTextStyle(
+                duration: reducedMotion ? Duration.zero : AppMotion.standard,
+                curve: AppMotion.stateChange,
                 style: TextStyle(
                   color: itemColor,
                   fontSize: 11,
                   fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
                   letterSpacing: -0.2,
                 ),
+                child: Text(label),
               ),
             ),
           ],

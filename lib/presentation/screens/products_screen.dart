@@ -11,6 +11,9 @@ import '../widgets/tibsy_refresh_icon.dart';
 import '../widgets/app_search_bar.dart';
 import '../../core/utils/validators.dart';
 import '../../core/theme/theme_helper.dart';
+import '../../core/theme/app_motion.dart';
+import '../widgets/bouncing_button.dart';
+import '../widgets/animated_currency_text.dart';
 
 class ProductsScreen extends ConsumerStatefulWidget {
   final bool isSelectionMode;
@@ -180,20 +183,25 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
                         ),
                       )
                     : Column(
-                        children: products.map((product) {
-                          return _ProductListItem(
-                            product: product,
-                            currencyFormat: currencyFormat,
-                            isSelectionMode: widget.isSelectionMode,
-                            onEdit: () => _showProductDialog(context, product),
-                            onDelete: () => _deleteProduct(context, product.id),
-                            onTap: () {
-                              if (widget.isSelectionMode) {
-                                context.pop(product);
-                              } else {
-                                _showProductDialog(context, product);
-                              }
-                            },
+                        children: products.asMap().entries.map((entry) {
+                          final index = entry.key;
+                          final product = entry.value;
+                          return StaggeredSlideFade(
+                            index: index.clamp(0, 8),
+                            child: _ProductListItem(
+                              product: product,
+                              currencyFormat: currencyFormat,
+                              isSelectionMode: widget.isSelectionMode,
+                              onEdit: () => _showProductDialog(context, product),
+                              onDelete: () => _deleteProduct(context, product.id),
+                              onTap: () {
+                                if (widget.isSelectionMode) {
+                                  context.pop(product);
+                                } else {
+                                  _showProductDialog(context, product);
+                                }
+                              },
+                            ),
                           );
                         }).toList(),
                       ),
@@ -346,23 +354,24 @@ class _ProductListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: context.cardBg,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: context.cardBorder),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: InkWell(
-        onTap: onTap,
+    return BouncingButton(
+      scaleFactor: 0.98,
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: context.cardBg,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: context.cardBorder),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
         child: Row(
           children: [
             Container(
@@ -395,8 +404,9 @@ class _ProductListItem extends StatelessWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text(
-                  currencyFormat.format(product.defaultPrice),
+                AnimatedCurrencyText(
+                  value: product.defaultPrice,
+                  formatter: currencyFormat,
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFFFF5722)),
                 ),
                 if (!isSelectionMode)

@@ -208,9 +208,20 @@ final routerProvider = Provider<GoRouter>((ref) {
         navigatorKey: shellNavigatorKey,
         builder: (context, state, child) => NavShell(state: state, child: child),
         routes: [
-          GoRoute(path: '/dashboard', pageBuilder: (c, s) => const NoTransitionPage(child: DashboardScreen())),
-          GoRoute(path: '/history', pageBuilder: (c, s) => const NoTransitionPage(child: InvoicesHistoryScreen())),
-          GoRoute(path: '/clients-tab', pageBuilder: (c, s) => const NoTransitionPage(child: ClientsScreen())),
+          GoRoute(
+            path: '/dashboard',
+            pageBuilder: (c, s) => const NoTransitionPage(child: DashboardScreen()),
+          ),
+          GoRoute(
+            path: '/history',
+            pageBuilder: (c, s) => NoTransitionPage(
+              child: InvoicesHistoryScreen(
+                initialStatusFilter: s.extra is String
+                    ? (s.extra as String)
+                    : s.uri.queryParameters['status'],
+              ),
+            ),
+          ),
           GoRoute(path: '/clients', pageBuilder: (c, s) => const NoTransitionPage(child: ClientsScreen())),
           GoRoute(path: '/expenses', pageBuilder: (c, s) => const NoTransitionPage(child: ExpensesScreen())),
           GoRoute(path: '/profile', pageBuilder: (c, s) => const NoTransitionPage(child: ProfileScreen())),

@@ -18,6 +18,8 @@ import '../widgets/tibsy_refresh_icon.dart';
 import '../widgets/status_badge.dart';
 import '../widgets/bouncing_button.dart';
 import '../widgets/celebration_sparkle.dart';
+import '../widgets/animated_currency_text.dart';
+import '../../core/theme/app_motion.dart';
 import 'create_invoice_screen.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
@@ -29,6 +31,7 @@ class DashboardScreen extends ConsumerStatefulWidget {
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   bool _isGridView = false;
+  String _selectedTimeframe = 'all'; // 'all', 'month', '90d', 'week'
 
   String _getGreeting() {
     final hour = DateTime.now().hour;
@@ -67,22 +70,64 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           error: (_, _) => 'Freelancer',
         );
 
-    final totalRevenue = invoices.isNotEmpty
-        ? invoices.fold<double>(0.0, (sum, i) => sum + i.total)
+    final now = DateTime.now();
+    List<Invoice> timeframeInvoices;
+    switch (_selectedTimeframe) {
+      case 'week':
+        final cutoff = now.subtract(const Duration(days: 7));
+        timeframeInvoices = invoices.where((i) => i.issueDate.isAfter(cutoff)).toList();
+        break;
+      case 'month':
+        final cutoff = DateTime(now.year, now.month, 1);
+        timeframeInvoices = invoices
+            .where((i) => i.issueDate.isAfter(cutoff.subtract(const Duration(seconds: 1))))
+            .toList();
+        break;
+      case '90d':
+        final cutoff = now.subtract(const Duration(days: 90));
+        timeframeInvoices = invoices.where((i) => i.issueDate.isAfter(cutoff)).toList();
+        break;
+      case 'all':
+      default:
+        timeframeInvoices = invoices;
+        break;
+    }
+
+    final totalRevenue = timeframeInvoices.isNotEmpty
+        ? timeframeInvoices.fold<double>(0.0, (sum, i) => sum + i.total)
         : ((stats['totalRevenue'] as double?) ?? 0.0);
-    final pendingInvoices = invoices.where((i) => !i.isPaid).toList().reversed.toList();
-    final pendingAmount = invoices.isNotEmpty
+    final paidInvoices = timeframeInvoices.where((i) => i.isPaid).toList();
+    final paidAmount = paidInvoices.fold<double>(0.0, (sum, i) => sum + i.total);
+    final pendingInvoices = timeframeInvoices.where((i) => !i.isPaid).toList().reversed.toList();
+    final pendingAmount = timeframeInvoices.isNotEmpty
         ? pendingInvoices.fold<double>(0.0, (sum, i) => sum + i.total)
         : ((stats['pendingAmount'] as double?) ?? 0.0);
     final pendingCount = pendingInvoices.length;
+    final overdueInvoices =
+        timeframeInvoices.where((i) => !i.isPaid && i.dueDate.isBefore(now)).toList();
+    final overdueAmount = overdueInvoices.fold<double>(0.0, (sum, i) => sum + i.total);
+
     final growth = (stats['revenueGrowth'] as double?) ?? 12.8;
     final isGrowthPositive = (stats['isGrowthPositive'] as bool?) ?? true;
 
-    final displayInvoices = pendingInvoices.isNotEmpty ? pendingInvoices : invoices.take(4).toList();
+    final displayInvoices = pendingInvoices.isNotEmpty ? pendingInvoices : timeframeInvoices.take(4).toList();
     final isWide = MediaQuery.sizeOf(context).width >= 900;
 
     if (isWide) {
-      return _buildWebDashboard(context, displayName, invoices, currencyFormat);
+      return _buildWebDashboard(
+        context: context,
+        displayName: displayName,
+        invoices: timeframeInvoices,
+        currencyFormat: currencyFormat,
+        totalRevenue: totalRevenue,
+        paidAmount: paidAmount,
+        pendingAmount: pendingAmount,
+        pendingCount: pendingCount,
+        overdueInvoices: overdueInvoices,
+        overdueAmount: overdueAmount,
+        growth: growth,
+        isGrowthPositive: isGrowthPositive,
+      );
     }
 
     return Scaffold(
@@ -201,19 +246,40 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // ── Row of 2 Hero Metric Cards (Total Revenue & Pending Payments) ──
-                      IntrinsicHeight(
+                      // ── Timeframe Filter Chips Bar ──
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        physics: const BouncingScrollPhysics(),
                         child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            // Card 1: Total Revenue
-                            Expanded(
-                              child: GestureDetector(
-                                onTap: () => context.go('/expenses'),
-                                child: Container(
-                                  padding: const EdgeInsets.all(16),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
+                            _buildTimeframeChip('all', 'All Time'),
+                            const SizedBox(width: 8),
+                            _buildTimeframeChip('month', 'This Month'),
+                            const SizedBox(width: 8),
+                            _buildTimeframeChip('90d', '90 Days'),
+                            const SizedBox(width: 8),
+                            _buildTimeframeChip('week', 'This Week'),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // ── Row of 2 Hero Metric Cards (Total Revenue & Pending Payments) ──
+                      StaggeredSlideFade(
+                        index: 0,
+                        child: IntrinsicHeight(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              // Card 1: Total Revenue
+                              Expanded(
+                                child: BouncingButton(
+                                  scaleFactor: 0.98,
+                                  onTap: () => context.push('/history', extra: 'Paid'),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
                                     borderRadius: BorderRadius.circular(22),
                                     border: Border.all(color: const Color(0xFFE5E7EB)),
                                     boxShadow: [
@@ -279,7 +345,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                       SizedBox(
                                         height: 44,
                                         child: _RevenueBarsGraphic(
-                                          invoices: invoices,
+                                          invoices: timeframeInvoices,
                                           currencyFormat: currencyFormat,
                                         ),
                                       ),
@@ -292,8 +358,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
                             // Card 2: Pending Payments
                             Expanded(
-                              child: GestureDetector(
-                                onTap: () => context.push('/history'),
+                              child: BouncingButton(
+                                scaleFactor: 0.98,
+                                onTap: () => context.push('/history', extra: 'Unpaid'),
                                 child: Container(
                                   padding: const EdgeInsets.all(16),
                                   decoration: BoxDecoration(
@@ -363,7 +430,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                       SizedBox(
                                         height: 44,
                                         child: _DotMatrixGraphic(
-                                          invoices: invoices,
+                                          invoices: timeframeInvoices,
                                           currencyFormat: currencyFormat,
                                         ),
                                       ),
@@ -375,6 +442,136 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           ],
                         ),
                       ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // ── Sub-Metrics: Collected Revenue & Overdue Invoices ──
+                    Row(
+                      children: [
+                        Expanded(
+                          child: BouncingButton(
+                            onTap: () => context.push('/history', extra: 'Paid'),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: const Color(0xFFE5E7EB)),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.02),
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 28,
+                                    height: 28,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.check_circle_outline_rounded, size: 16, color: Color(0xFF10B981)),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'Collected',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: Color(0xFF64748B),
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 1),
+                                        Text(
+                                          currencyFormat.format(paidAmount),
+                                          style: const TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w800,
+                                            color: Color(0xFF0F172A),
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: BouncingButton(
+                            onTap: () => context.push('/history', extra: 'Unpaid'),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: const Color(0xFFE5E7EB)),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.02),
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 28,
+                                    height: 28,
+                                    decoration: BoxDecoration(
+                                      color: (overdueInvoices.isNotEmpty ? const Color(0xFFEF4444) : const Color(0xFF94A3B8)).withValues(alpha: 0.12),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(Icons.alarm_rounded, size: 16, color: overdueInvoices.isNotEmpty ? const Color(0xFFEF4444) : const Color(0xFF94A3B8)),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          overdueInvoices.isNotEmpty ? '${overdueInvoices.length} Overdue' : 'Overdue',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: overdueInvoices.isNotEmpty ? const Color(0xFFEF4444) : const Color(0xFF64748B),
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 1),
+                                        Text(
+                                          currencyFormat.format(overdueAmount),
+                                          style: const TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w800,
+                                            color: Color(0xFF0F172A),
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
 
                       const SizedBox(height: 22),
 
@@ -391,10 +588,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       const SizedBox(height: 12),
 
                       // ── AI Invoice Insights Dark Card with Orange / Lime Button ──
-                      Container(
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1E2128), // Sleek Dark Charcoal Card
-                          borderRadius: BorderRadius.circular(24),
+                      StaggeredSlideFade(
+                        index: 1,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1E2128), // Sleek Dark Charcoal Card
+                            borderRadius: BorderRadius.circular(24),
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black.withValues(alpha: 0.12),
@@ -670,6 +869,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                 ],
                               ),
                       ),
+                    ),
 
                       const SizedBox(height: 24),
 
@@ -740,6 +940,45 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
+  Widget _buildTimeframeChip(String key, String label) {
+    final isSelected = _selectedTimeframe == key;
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        setState(() => _selectedTimeframe = key);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF1E2128) : Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: isSelected ? const Color(0xFF1E2128) : const Color(0xFFE2E8F0),
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+            color: isSelected ? Colors.white : const Color(0xFF64748B),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildAvatar(BusinessProfile profile, [User? user]) {
     final logo = profile.logoUrl?.trim();
     if (logo != null && logo.isNotEmpty) {
@@ -795,51 +1034,600 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   // ── MIRO-INSPIRED DESKTOP WEB DASHBOARD ──────────────────────
   // ─────────────────────────────────────────────────────────────
 
-  Widget _buildWebDashboard(
-    BuildContext context,
-    String displayName,
-    List<Invoice> invoices,
-    NumberFormat currencyFormat,
-  ) {
-    return Scaffold(
-      backgroundColor: context.scaffoldBg,
-      body: SingleChildScrollView(
+  Widget _buildWebDashboard({
+    required BuildContext context,
+    required String displayName,
+    required List<Invoice> invoices,
+    required NumberFormat currencyFormat,
+    required double totalRevenue,
+    required double paidAmount,
+    required double pendingAmount,
+    required int pendingCount,
+    required List<Invoice> overdueInvoices,
+    required double overdueAmount,
+    required double growth,
+    required bool isGrowthPositive,
+  }) {
+    return Material(
+      color: const Color(0xFFF7F8FA),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1120),
+            constraints: const BoxConstraints(maxWidth: 1160),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── 1. Editorial Hero Greeting ──
+                // ── 1. Editorial Hero Greeting & Live Date Badge ──
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(40, 36, 40, 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  padding: const EdgeInsets.fromLTRB(40, 32, 40, 20),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Text(
-                        '${_getGreeting()}, ${_getFirstName(displayName)}',
-                        style: TextStyle(
-                          fontFamily: 'SpaceGrotesk',
-                          fontSize: 34,
-                          fontWeight: FontWeight.w700,
-                          color: context.textPrimary,
-                          letterSpacing: -0.6,
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${_getGreeting()}, ${_getFirstName(displayName)}',
+                              style: TextStyle(
+                                fontFamily: 'SpaceGrotesk',
+                                fontSize: 32,
+                                fontWeight: FontWeight.w700,
+                                color: context.textPrimary,
+                                letterSpacing: -0.6,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              "Welcome to your invoicing workspace. Here's a real-time overview of your revenue, cash flow, and recent activity.",
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w400,
+                                color: context.textSecondary,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Welcome to your invoicing workspace. Start a new invoice or jump back to recent activity.',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w400,
-                          color: context.textSecondary,
+                      const SizedBox(width: 20),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.02),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.calendar_today_rounded, size: 14, color: AppColors.textSecondary),
+                            const SizedBox(width: 8),
+                            Text(
+                              DateFormat('EEEE, d MMMM yyyy').format(DateTime.now()),
+                              style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
 
-                // ── 2. "Start something new" Section ──
+                // ── 2. Timeframe Filter Chips Bar ──
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 40),
+                  child: Row(
+                    children: [
+                      _buildTimeframeChip('all', 'All Time'),
+                      const SizedBox(width: 8),
+                      _buildTimeframeChip('month', 'This Month'),
+                      const SizedBox(width: 8),
+                      _buildTimeframeChip('90d', '90 Days'),
+                      const SizedBox(width: 8),
+                      _buildTimeframeChip('week', 'This Week'),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 18),
+
+                // ── 3. Financial Hero Metric Cards ──
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 40),
+                  child: Column(
+                    children: [
+                      IntrinsicHeight(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            // Card 1: Total Revenue
+                            Expanded(
+                              child: BouncingButton(
+                                scaleFactor: 0.98,
+                                onTap: () => context.push('/history', extra: 'Paid'),
+                                child: Container(
+                                  padding: const EdgeInsets.all(20),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(alpha: 0.02),
+                                        blurRadius: 10,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              const Flexible(
+                                                child: Text(
+                                                  'Total Revenue',
+                                                  style: TextStyle(
+                                                    color: Color(0xFF64748B),
+                                                    fontSize: 13.5,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                                decoration: BoxDecoration(
+                                                  color: (isGrowthPositive ? const Color(0xFF10B981) : const Color(0xFFEF4444)).withValues(alpha: 0.1),
+                                                  borderRadius: BorderRadius.circular(12),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Icon(
+                                                      isGrowthPositive ? Icons.trending_up_rounded : Icons.trending_down_rounded,
+                                                      size: 13,
+                                                      color: isGrowthPositive ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                                                    ),
+                                                    const SizedBox(width: 3),
+                                                    Text(
+                                                      '${isGrowthPositive ? '+' : ''}${growth.toStringAsFixed(1)}%',
+                                                      style: TextStyle(
+                                                        color: isGrowthPositive ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                                                        fontSize: 11,
+                                                        fontWeight: FontWeight.w700,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 10),
+                                          _FormattedAmountText(
+                                            amount: totalRevenue,
+                                            currencyFormat: currencyFormat,
+                                          ),
+                                          const SizedBox(height: 4),
+                                          const Text(
+                                            'Cumulative revenue for selected period',
+                                            style: TextStyle(
+                                              color: Color(0xFF94A3B8),
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 18),
+                                      SizedBox(
+                                        height: 48,
+                                        child: _RevenueBarsGraphic(
+                                          invoices: invoices,
+                                          currencyFormat: currencyFormat,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                            const SizedBox(width: 16),
+
+                            // Card 2: Pending Payments
+                            Expanded(
+                              child: BouncingButton(
+                                scaleFactor: 0.98,
+                                onTap: () => context.push('/history', extra: 'Unpaid'),
+                                child: Container(
+                                  padding: const EdgeInsets.all(20),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(alpha: 0.02),
+                                        blurRadius: 10,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              const Flexible(
+                                                child: Text(
+                                                  'Pending Payments',
+                                                  style: TextStyle(
+                                                    color: Color(0xFF64748B),
+                                                    fontSize: 13.5,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                                decoration: BoxDecoration(
+                                                  color: AppColors.primary.withValues(alpha: 0.1),
+                                                  borderRadius: BorderRadius.circular(12),
+                                                ),
+                                                child: Text(
+                                                  '$pendingCount ${pendingCount == 1 ? 'invoice' : 'invoices'}',
+                                                  style: const TextStyle(
+                                                    color: AppColors.primary,
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 10),
+                                          _FormattedAmountText(
+                                            amount: pendingAmount,
+                                            currencyFormat: currencyFormat,
+                                          ),
+                                          const SizedBox(height: 4),
+                                          const Text(
+                                            'Awaiting settlement from clients',
+                                            style: TextStyle(
+                                              color: Color(0xFF94A3B8),
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 18),
+                                      SizedBox(
+                                        height: 48,
+                                        child: _DotMatrixGraphic(
+                                          invoices: invoices,
+                                          currencyFormat: currencyFormat,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      // Sub-Metrics: Collected & Overdue
+                      Row(
+                        children: [
+                          Expanded(
+                            child: BouncingButton(
+                              scaleFactor: 0.98,
+                              onTap: () => context.push('/history', extra: 'Paid'),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: const Color(0xFFE5E7EB)),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.02),
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 36,
+                                      height: 36,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(Icons.check_circle_outline_rounded, size: 20, color: Color(0xFF10B981)),
+                                    ),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            'Collected Revenue',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Color(0xFF64748B),
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            currencyFormat.format(paidAmount),
+                                            style: const TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w800,
+                                              color: Color(0xFF0F172A),
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFF94A3B8)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: BouncingButton(
+                              scaleFactor: 0.98,
+                              onTap: () => context.push('/history', extra: 'Unpaid'),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: const Color(0xFFE5E7EB)),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.02),
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 36,
+                                      height: 36,
+                                      decoration: BoxDecoration(
+                                        color: (overdueInvoices.isNotEmpty ? const Color(0xFFEF4444) : const Color(0xFF94A3B8)).withValues(alpha: 0.12),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        Icons.alarm_rounded,
+                                        size: 20,
+                                        color: overdueInvoices.isNotEmpty ? const Color(0xFFEF4444) : const Color(0xFF94A3B8),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            overdueInvoices.isNotEmpty ? '${overdueInvoices.length} Overdue Invoices' : 'Overdue Invoices',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: overdueInvoices.isNotEmpty ? const Color(0xFFEF4444) : const Color(0xFF64748B),
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            currencyFormat.format(overdueAmount),
+                                            style: const TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w800,
+                                              color: Color(0xFF0F172A),
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFF94A3B8)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 22),
+
+                // ── 4. AI Invoice Insights Banner ──
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 40),
+                  child: Container(
+                    padding: const EdgeInsets.all(22),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E2128),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.1),
+                          blurRadius: 14,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final isCompactBanner = constraints.maxWidth < 650;
+                        final content = Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Wrap(
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 8,
+                              runSpacing: 4,
+                              children: [
+                                const Text(
+                                  'AI Financial Insights',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primary,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Text(
+                                    'PRO',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 9.5,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 5),
+                            Text(
+                              overdueInvoices.isNotEmpty
+                                  ? 'You have ${overdueInvoices.length} overdue invoices totaling ${currencyFormat.format(overdueAmount)}. Send 1-tap WhatsApp payment reminders to accelerate settlement.'
+                                  : pendingAmount > 0
+                                      ? 'Healthy cash flow forecast. ${currencyFormat.format(pendingAmount)} is scheduled for settlement across $pendingCount invoices this cycle.'
+                                      : 'All invoices settled! You have a 100% collection rate. Ready to create your next project invoice?',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.8),
+                                fontSize: 13,
+                                height: 1.4,
+                              ),
+                            ),
+                          ],
+                        );
+
+                        final actionButton = ElevatedButton.icon(
+                          onPressed: () => context.push('/history', extra: overdueInvoices.isNotEmpty ? 'Unpaid' : null),
+                          icon: const Icon(Icons.arrow_forward_rounded, size: 15, color: Color(0xFF1E2128)),
+                          label: const Text(
+                            'Review Invoices',
+                            style: TextStyle(
+                              color: Color(0xFF1E2128),
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: const Color(0xFF1E2128),
+                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            elevation: 0,
+                          ),
+                        );
+
+                        if (isCompactBanner) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    width: 38,
+                                    height: 38,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primary.withValues(alpha: 0.2),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.auto_awesome, color: AppColors.primary, size: 20),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(child: content),
+                                ],
+                              ),
+                              const SizedBox(height: 14),
+                              actionButton,
+                            ],
+                          );
+                        }
+
+                        return Row(
+                          children: [
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withValues(alpha: 0.2),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.auto_awesome, color: AppColors.primary, size: 22),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(child: content),
+                            const SizedBox(width: 20),
+                            actionButton,
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 28),
+
+                // ── 5. "Start something new" Section ──
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 40),
                   child: Row(
@@ -1677,7 +2465,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 }
 
 
-// ── Formatted Amount with .00 Decimals ──
+// ── Formatted Amount with .00 Decimals & Animated Rolling Numbers ──
 class _FormattedAmountText extends StatelessWidget {
   final double amount;
   final NumberFormat currencyFormat;
@@ -1689,46 +2477,9 @@ class _FormattedAmountText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final formatted = currencyFormat.format(amount);
-    String intPart = formatted;
-    String decPart = '.00';
-
-    if (formatted.contains('.')) {
-      final parts = formatted.split('.');
-      intPart = parts[0];
-      decPart = '.${parts[1]}';
-    } else if (formatted.contains(',')) {
-      final commaIndex = formatted.lastIndexOf(',');
-      if (commaIndex != -1 && commaIndex > formatted.length - 4) {
-        intPart = formatted.substring(0, commaIndex);
-        decPart = formatted.substring(commaIndex);
-      }
-    }
-
-    return FittedBox(
-      fit: BoxFit.scaleDown,
-      alignment: Alignment.centerLeft,
-      child: RichText(
-        text: TextSpan(
-          style: const TextStyle(
-            color: Color(0xFF0F172A),
-            fontSize: 21,
-            fontWeight: FontWeight.w900,
-            letterSpacing: -0.5,
-          ),
-          children: [
-            TextSpan(text: intPart),
-            TextSpan(
-              text: decPart,
-              style: const TextStyle(
-                color: Color(0xFF94A3B8),
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-      ),
+    return AnimatedFormattedAmount(
+      amount: amount,
+      currencyFormat: currencyFormat,
     );
   }
 }
@@ -1791,7 +2542,9 @@ class _RevenueBarsGraphic extends StatelessWidget {
 
           return Tooltip(
             message: '${data['day']}, ${data['date']}: ${currencyFormat.format(revenue)}',
-            child: Container(
+            child: AnimatedContainer(
+              duration: AppMotion.numberTransition,
+              curve: AppMotion.entrance,
               width: 14,
               height: height,
               decoration: BoxDecoration(
@@ -1870,7 +2623,9 @@ class _DotMatrixGraphic extends StatelessWidget {
 
                 return Tooltip(
                   message: tooltipMsg,
-                  child: Container(
+                  child: AnimatedContainer(
+                    duration: AppMotion.standard,
+                    curve: AppMotion.stateChange,
                     width: 7,
                     height: 7,
                     decoration: BoxDecoration(

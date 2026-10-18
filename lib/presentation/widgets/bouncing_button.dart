@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../core/theme/app_motion.dart';
 
+/// A premium, fintech-grade interactive button wrapper providing immediate
+/// tactile scale feedback (1.0 → 0.96), optional loading spinners, success checkmarks,
+/// and complete accessibility support for reduced motion.
 class BouncingButton extends StatefulWidget {
   final Widget child;
   final VoidCallback? onTap;
@@ -8,15 +12,21 @@ class BouncingButton extends StatefulWidget {
   final Duration duration;
   final bool enableHaptic;
   final BorderRadius? borderRadius;
+  final bool isLoading;
+  final bool isSuccess;
+  final Color? loadingColor;
 
   const BouncingButton({
     super.key,
     required this.child,
     this.onTap,
     this.scaleFactor = 0.96,
-    this.duration = const Duration(milliseconds: 110),
+    this.duration = AppMotion.micro,
     this.enableHaptic = true,
     this.borderRadius,
+    this.isLoading = false,
+    this.isSuccess = false,
+    this.loadingColor,
   });
 
   @override
@@ -43,8 +53,8 @@ class _BouncingButtonState extends State<BouncingButton>
     ).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: Curves.easeInOut,
-        reverseCurve: Curves.easeOutBack,
+        curve: AppMotion.entrance,
+        reverseCurve: AppMotion.subtleSpring,
       ),
     );
   }
@@ -56,7 +66,7 @@ class _BouncingButtonState extends State<BouncingButton>
   }
 
   void _onTapDown(TapDownDetails details) {
-    if (widget.onTap == null) return;
+    if (widget.onTap == null || widget.isLoading) return;
     if (widget.enableHaptic) {
       HapticFeedback.lightImpact();
     }
@@ -64,38 +74,91 @@ class _BouncingButtonState extends State<BouncingButton>
   }
 
   void _onTapUp(TapUpDetails details) {
-    if (widget.onTap == null) return;
+    if (widget.onTap == null || widget.isLoading) return;
     _controller.reverse();
     widget.onTap?.call();
   }
 
   void _onTapCancel() {
-    if (widget.onTap == null) return;
+    if (widget.onTap == null || widget.isLoading) return;
     _controller.reverse();
   }
 
   @override
   Widget build(BuildContext context) {
-    final disableAnimations = MediaQuery.of(context).disableAnimations;
+    final bool isDisabled = widget.onTap == null;
+    final bool reducedMotion = AppMotion.isReducedMotion(context);
+
+    Widget content = widget.child;
+
+    if (widget.isLoading || widget.isSuccess) {
+      content = AnimatedSwitcher(
+        duration: AppMotion.standard,
+        switchInCurve: AppMotion.entrance,
+        switchOutCurve: AppMotion.stateChange,
+        transitionBuilder: (child, animation) {
+          return FadeTransition(
+            opacity: animation,
+            child: ScaleTransition(scale: animation, child: child),
+          );
+        },
+        child: widget.isLoading
+            ? Center(
+                key: const ValueKey('loading'),
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.2,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      widget.loadingColor ?? Colors.white,
+                    ),
+                  ),
+                ),
+              )
+            : widget.isSuccess
+                ? const Center(
+                    key: ValueKey('success'),
+                    child: Icon(
+                      Icons.check_circle_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                  )
+                : widget.child,
+      );
+    }
+
+    if (isDisabled) {
+      return Opacity(
+        opacity: 0.55,
+        child: content,
+      );
+    }
+
+    if (reducedMotion) {
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.isLoading ? null : widget.onTap,
+        child: content,
+      );
+    }
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTapDown: disableAnimations ? null : _onTapDown,
-      onTapUp: disableAnimations ? null : _onTapUp,
-      onTapCancel: disableAnimations ? null : _onTapCancel,
-      onTap: disableAnimations ? widget.onTap : null,
-      child: disableAnimations
-          ? widget.child
-          : AnimatedBuilder(
-              animation: _scaleAnimation,
-              builder: (context, child) {
-                return Transform.scale(
-                  scale: _scaleAnimation.value,
-                  child: child,
-                );
-              },
-              child: widget.child,
-            ),
+      onTapDown: _onTapDown,
+      onTapUp: _onTapUp,
+      onTapCancel: _onTapCancel,
+      child: AnimatedBuilder(
+        animation: _scaleAnimation,
+        builder: (context, child) {
+          return Transform.scale(
+            scale: _scaleAnimation.value,
+            child: child,
+          );
+        },
+        child: content,
+      ),
     );
   }
 }

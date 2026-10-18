@@ -12,6 +12,8 @@ import '../../services/contact_service.dart';
 import '../widgets/device_contact_picker_sheet.dart';
 import '../../core/utils/validators.dart';
 import '../../core/theme/theme_helper.dart';
+import '../../core/theme/app_motion.dart';
+import '../widgets/animated_currency_text.dart';
 
 class ClientsScreen extends ConsumerStatefulWidget {
   final bool isSelectionMode;
@@ -314,8 +316,8 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                                       color: const Color(0xFFF1F5F9),
                                       borderRadius: BorderRadius.circular(12),
                                     ),
-                                    child: Text(
-                                      '${clients.length}',
+                                    child: AnimatedCountText(
+                                      count: clients.length,
                                       style: const TextStyle(
                                         fontSize: 12,
                                         fontWeight: FontWeight.w800,
@@ -525,7 +527,10 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                         separatorBuilder: (ctx, i) => const SizedBox(height: 10),
                         itemBuilder: (ctx, index) {
                           final client = filteredClients[index];
-                          return _buildClientCard(client);
+                          return StaggeredSlideFade(
+                            index: index.clamp(0, 10),
+                            child: _buildClientCard(client),
+                          );
                         },
                       ),
 
@@ -541,7 +546,8 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
   }
 
   Widget _buildClientCard(Client client) {
-    return GestureDetector(
+    return BouncingButton(
+      scaleFactor: 0.98,
       onTap: () {
         if (widget.isSelectionMode) {
           context.pop(client);

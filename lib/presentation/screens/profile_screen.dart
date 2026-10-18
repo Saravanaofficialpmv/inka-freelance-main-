@@ -207,7 +207,7 @@ class ProfileScreen extends ConsumerWidget {
                     _SectionCard(
                       children: [
                         _SettingsTile(
-                          iconAsset: 'assets/icons/profile/building.png',
+                          icon: Icons.business_outlined,
                           title: 'Company Details',
                           subtitle: businessProfile.businessName.isNotEmpty
                               ? businessProfile.businessName
@@ -215,7 +215,7 @@ class ProfileScreen extends ConsumerWidget {
                           onTap: () => context.go('/company-details'),
                         ),
                         _SettingsTile(
-                          iconAsset: 'assets/icons/profile/bank-2.png',
+                          icon: Icons.account_balance_outlined,
                           title: 'Bank & UPI Details',
                           subtitle: (businessProfile.accountNo != null && businessProfile.accountNo!.isNotEmpty)
                               ? 'A/C: ****${businessProfile.accountNo!.length >= 4 ? businessProfile.accountNo!.substring(businessProfile.accountNo!.length - 4) : businessProfile.accountNo}'
@@ -225,7 +225,7 @@ class ProfileScreen extends ConsumerWidget {
                           onTap: () => context.go('/bank-details'),
                         ),
                         _SettingsTile(
-                          iconAsset: 'assets/icons/profile/digital-signature.png',
+                          icon: Icons.draw_outlined,
                           title: 'Signatures & Stamps',
                           subtitle: (businessProfile.signatureUrl != null && businessProfile.signatureUrl!.isNotEmpty)
                               ? 'Digital signature configured'
@@ -241,25 +241,25 @@ class ProfileScreen extends ConsumerWidget {
                     _SectionCard(
                       children: [
                         _SettingsTile(
-                          iconAsset: 'assets/icons/profile/tax-free.png',
+                          icon: Icons.tune_outlined,
                           title: 'Document Settings',
                           subtitle: 'Tax (${businessProfile.taxLabel.isNotEmpty ? businessProfile.taxLabel : "GST"} ${businessProfile.defaultTaxRate.toStringAsFixed(0)}%) & Currency (${businessProfile.currency})',
                           onTap: () => context.go('/document-settings'),
                         ),
                         _SettingsTile(
-                          iconAsset: 'assets/icons/profile/paper.png',
+                          icon: Icons.dashboard_customize_outlined,
                           title: 'Invoice Templates',
                           subtitle: '14 professional layout designs',
                           onTap: () => context.go('/templates'),
                         ),
                         _SettingsTile(
-                          icon: Icons.menu_book_outlined,
+                          icon: Icons.description_outlined,
                           title: 'Notes & Terms',
                           subtitle: 'Default payment terms and notes',
                           onTap: () => context.go('/notes-terms'),
                         ),
                         _SettingsTile(
-                          iconAsset: 'assets/icons/profile/inventory.png',
+                          icon: Icons.inventory_2_outlined,
                           title: 'Product Catalog',
                           subtitle: 'Manage items, inventory & pricing',
                           isLast: true,
@@ -273,7 +273,7 @@ class ProfileScreen extends ConsumerWidget {
                     _SectionCard(
                       children: [
                         _SettingsTile(
-                          iconAsset: 'assets/icons/profile/exchange-rate.png',
+                          icon: Icons.monetization_on_outlined,
                           title: 'Currency',
                           subtitle: '${CurrencyTaxService.findCurrency(businessProfile.currency).name} (${CurrencyTaxService.findCurrency(businessProfile.currency).symbol})',
                           onTap: () => context.go('/currency-settings'),
@@ -285,7 +285,7 @@ class ProfileScreen extends ConsumerWidget {
                           onTap: () => context.go('/language-settings'),
                         ),
                         _SettingsTile(
-                          iconAsset: 'assets/icons/profile/insurance.png',
+                          icon: Icons.workspace_premium_outlined,
                           title: 'Subscription Plans',
                           subtitle: subscription.isPro ? 'Inka Pro Active' : 'Explore Pro & Subscription Plans',
                           badge: subscription.isPro ? _BadgeType.pro : null,
@@ -300,25 +300,25 @@ class ProfileScreen extends ConsumerWidget {
                     _SectionCard(
                       children: [
                         _SettingsTile(
-                          iconAsset: 'assets/icons/profile/handshake.png',
+                          icon: Icons.support_agent_outlined,
                           title: 'Help & Support',
                           subtitle: 'Contact via WhatsApp & Email',
                           onTap: () => context.go('/help-support'),
                         ),
                         _SettingsTile(
-                          iconAsset: 'assets/icons/profile/policy-privacy.png',
+                          icon: Icons.shield_outlined,
                           title: 'Privacy Policy',
                           subtitle: 'Data protection and security',
                           onTap: () => context.go('/privacy-policy'),
                         ),
                         _SettingsTile(
-                          iconAsset: 'assets/icons/profile/exit.png',
+                          icon: Icons.logout_rounded,
                           title: 'Logout',
                           subtitle: 'Sign out of your account',
                           onTap: () => _showLogoutConfirmDialog(context, ref),
                         ),
                         _SettingsTile(
-                          icon: Icons.delete_forever_rounded,
+                          icon: Icons.delete_forever_outlined,
                           iconColor: AppColors.error,
                           titleColor: AppColors.error,
                           title: 'Delete Account',
@@ -779,7 +779,6 @@ class _SectionCard extends StatelessWidget {
 }
 
 class _SettingsTile extends StatelessWidget {
-  final String? iconAsset;
   final IconData? icon;
   final String title;
   final String? subtitle;
@@ -790,7 +789,6 @@ class _SettingsTile extends StatelessWidget {
   final Color? titleColor;
 
   const _SettingsTile({
-    this.iconAsset,
     this.icon,
     required this.title,
     this.subtitle,
@@ -804,33 +802,15 @@ class _SettingsTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final effectiveIconColor = iconColor ?? (context.isDarkMode ? const Color(0xFFCBD5E1) : const Color(0xFF1E293B));
-
-    Widget leadingWidget;
-    if (iconAsset != null) {
-      leadingWidget = SizedBox(
-        width: 26,
-        height: 26,
-        child: Center(
-          child: Image.asset(
-            iconAsset!,
-            width: 22,
-            height: 22,
-            color: effectiveIconColor,
-            colorBlendMode: BlendMode.srcIn,
-            semanticLabel: title,
-            filterQuality: FilterQuality.medium,
-          ),
-        ),
-      );
-    } else {
-      leadingWidget = Icon(icon ?? Icons.circle, color: effectiveIconColor, size: 22);
-    }
+    final leadingWidget = Icon(icon ?? Icons.circle_outlined, color: effectiveIconColor, size: 22);
 
     return Column(
       children: [
-        ListTile(
-          onTap: onTap,
-          dense: true,
+        Material(
+          color: Colors.transparent,
+          child: ListTile(
+            onTap: onTap,
+            dense: true,
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           leading: leadingWidget,
           title: Row(
@@ -863,6 +843,7 @@ class _SettingsTile extends StatelessWidget {
               : null,
           trailing: Icon(Icons.chevron_right, color: context.textMuted, size: 20),
         ),
+      ),
         if (!isLast) Divider(height: 1, indent: 58, endIndent: 16, color: context.cardBorder),
       ],
     );

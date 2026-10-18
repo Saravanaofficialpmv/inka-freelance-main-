@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/theme/app_motion.dart';
 import '../../core/constants/colors.dart';
 import 'custom_bottom_nav.dart';
 import 'web_sidebar.dart';
@@ -8,6 +9,7 @@ import '../providers/auth_provider.dart';
 import '../providers/profile_provider.dart';
 import '../providers/subscription_provider.dart';
 import '../screens/create_invoice_screen.dart';
+import 'notifications_sheet.dart';
 
 class NavShell extends ConsumerWidget {
   final Widget child;
@@ -18,6 +20,7 @@ class NavShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final location = state.matchedLocation;
     final isWide = MediaQuery.sizeOf(context).width >= 900;
+    final bool reducedMotion = AppMotion.isReducedMotion(context);
     int currentIndex = 0;
 
     if (location.startsWith('/dashboard')) {
@@ -47,6 +50,39 @@ class NavShell extends ConsumerWidget {
     } else {
       currentIndex = -1;
     }
+
+    final Widget animatedContent = AnimatedSwitcher(
+      duration: reducedMotion ? Duration.zero : AppMotion.navigation,
+      switchInCurve: AppMotion.entrance,
+      switchOutCurve: AppMotion.stateChange,
+      layoutBuilder: (currentChild, previousChildren) {
+        return Stack(
+          fit: StackFit.expand,
+          alignment: Alignment.topLeft,
+          children: <Widget>[
+            ...previousChildren,
+            ?currentChild,
+          ],
+        );
+      },
+      transitionBuilder: (child, animation) {
+        if (reducedMotion) return child;
+        return FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0.015, 0.0),
+              end: Offset.zero,
+            ).animate(CurvedAnimation(parent: animation, curve: AppMotion.entrance)),
+            child: child,
+          ),
+        );
+      },
+      child: KeyedSubtree(
+        key: ValueKey(location),
+        child: child,
+      ),
+    );
 
     if (isWide) {
       return Scaffold(
@@ -83,7 +119,7 @@ class NavShell extends ConsumerWidget {
                     _WebCanvasTopBar(currentLocation: location),
                     const Divider(height: 1, thickness: 1, color: Color(0xFFF1F3F5)),
                     Expanded(
-                      child: child,
+                      child: animatedContent,
                     ),
                   ],
                 ),
@@ -98,7 +134,7 @@ class NavShell extends ConsumerWidget {
       backgroundColor: const Color(0xFFF7F8FA),
       body: Stack(
         children: [
-          child,
+          animatedContent,
           if (currentIndex >= 0)
             Positioned(
               bottom: 0,
@@ -162,14 +198,32 @@ class _WebCanvasTopBar extends ConsumerWidget {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                _getPageTitle(currentLocation),
-                style: const TextStyle(
-                  fontFamily: 'SpaceGrotesk',
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
-                  letterSpacing: -0.3,
+              AnimatedSwitcher(
+                duration: AppMotion.standard,
+                switchInCurve: AppMotion.entrance,
+                switchOutCurve: AppMotion.stateChange,
+                transitionBuilder: (child, animation) {
+                  return FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0.0, 0.15),
+                        end: Offset.zero,
+                      ).animate(animation),
+                      child: child,
+                    ),
+                  );
+                },
+                child: Text(
+                  _getPageTitle(currentLocation),
+                  key: ValueKey<String>(_getPageTitle(currentLocation)),
+                  style: const TextStyle(
+                    fontFamily: 'SpaceGrotesk',
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                    letterSpacing: -0.3,
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -289,17 +343,9 @@ class _WebCanvasTopBar extends ConsumerWidget {
                       clipBehavior: Clip.none,
                       children: [
                         IconButton(
-                          onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('No new notifications'),
-                                behavior: SnackBarBehavior.floating,
-                                duration: Duration(seconds: 2),
-                              ),
-                            );
-                          },
+                          onPressed: () => NotificationsSheet.show(context),
                           icon: const Icon(Icons.notifications_none_rounded, size: 21, color: AppColors.textSecondary),
-                          tooltip: 'Notifications',
+                          tooltip: 'Notifications & Activity',
                           splashRadius: 18,
                         ),
                         Positioned(

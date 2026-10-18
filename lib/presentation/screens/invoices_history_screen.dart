@@ -16,18 +16,40 @@ import '../widgets/celebration_sparkle.dart';
 import '../widgets/sync_status_badge.dart';
 import 'create_invoice_screen.dart';
 import '../../core/theme/theme_helper.dart';
+import '../../services/pdf_service.dart';
+import '../widgets/share_invoice_bottom_sheet.dart';
 
 class InvoicesHistoryScreen extends ConsumerStatefulWidget {
-  const InvoicesHistoryScreen({super.key});
+  final String? initialStatusFilter;
+  const InvoicesHistoryScreen({super.key, this.initialStatusFilter});
 
   @override
   ConsumerState<InvoicesHistoryScreen> createState() => _InvoicesHistoryScreenState();
 }
 
 class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
-  String _selectedStatusFilter = 'All';
+  late String _selectedStatusFilter;
+  String _selectedSort = 'date_desc'; // 'date_desc', 'date_asc', 'amount_desc', 'amount_asc'
+  String _selectedDateRange = 'all'; // 'all', '30d', '90d', 'year'
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedStatusFilter = widget.initialStatusFilter ?? 'All';
+  }
+
+  @override
+  void didUpdateWidget(InvoicesHistoryScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialStatusFilter != null &&
+        widget.initialStatusFilter != oldWidget.initialStatusFilter) {
+      setState(() {
+        _selectedStatusFilter = widget.initialStatusFilter!;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -207,8 +229,32 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
           inv.invoiceNumber.toLowerCase().contains(query) ||
           inv.client.name.toLowerCase().contains(query);
 
-      return matchesStatus && matchesSearch;
+      bool matchesDateRange = true;
+      final now = DateTime.now();
+      if (_selectedDateRange == '30d') {
+        matchesDateRange = inv.issueDate.isAfter(now.subtract(const Duration(days: 30)));
+      } else if (_selectedDateRange == '90d') {
+        matchesDateRange = inv.issueDate.isAfter(now.subtract(const Duration(days: 90)));
+      } else if (_selectedDateRange == 'year') {
+        matchesDateRange = inv.issueDate.year == now.year;
+      }
+
+      return matchesStatus && matchesSearch && matchesDateRange;
     }).toList();
+
+    filteredInvoices.sort((a, b) {
+      switch (_selectedSort) {
+        case 'date_asc':
+          return a.issueDate.compareTo(b.issueDate);
+        case 'amount_desc':
+          return b.total.compareTo(a.total);
+        case 'amount_asc':
+          return a.total.compareTo(b.total);
+        case 'date_desc':
+        default:
+          return b.issueDate.compareTo(a.issueDate);
+      }
+    });
 
     return Scaffold(
       backgroundColor: context.scaffoldBg,
@@ -618,17 +664,23 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
               ),
               const SizedBox(height: 10),
 
-              // Filter Tabs Row
-              Row(
-                children: [
-                  _buildFilterTab('All', invoices.length),
-                  const SizedBox(width: 8),
-                  _buildFilterTab('Paid', invoices.where((i) => i.status.toLowerCase() == 'paid').length),
-                  const SizedBox(width: 8),
-                  _buildFilterTab('Unpaid', unpaidCount),
-                  const SizedBox(width: 8),
-                  _buildFilterTab('Drafts', invoices.where((i) => i.status.toLowerCase() == 'draft').length),
-                ],
+              // Filter Tabs Row with Sort & Filter Trigger
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                child: Row(
+                  children: [
+                    _buildFilterTab('All', invoices.length),
+                    const SizedBox(width: 8),
+                    _buildFilterTab('Paid', invoices.where((i) => i.status.toLowerCase() == 'paid').length),
+                    const SizedBox(width: 8),
+                    _buildFilterTab('Unpaid', unpaidCount),
+                    const SizedBox(width: 8),
+                    _buildFilterTab('Drafts', invoices.where((i) => i.status.toLowerCase() == 'draft').length),
+                    const SizedBox(width: 8),
+                    _buildSortFilterTrigger(),
+                  ],
+                ),
               ),
 
               const SizedBox(height: 14),
@@ -852,39 +904,82 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
 
                               const SizedBox(width: 2),
 
-                              // More Options (Duplicate, View, Delete)
+                              // More Options (View, Edit, Share, Download, Duplicate, Delete)
                               PopupMenuButton<String>(
                                 icon: const Icon(Icons.more_vert_rounded, size: 18, color: Color(0xFF94A3B8)),
                                 padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(minWidth: 140),
+                                constraints: const BoxConstraints(minWidth: 160),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                onSelected: (action) {
-                                  if (action == 'duplicate') {
-                                    _handleDuplicateInvoice(inv);
-                                  } else if (action == 'preview') {
+                                onSelected: (action) async {
+                                  if (action == 'preview') {
                                     context.push('/preview', extra: inv);
+                                  } else if (action == 'edit') {
+                                    CreateInvoiceScreen.showAsBottomSheet(context, invoiceToEdit: inv);
+                                  } else if (action == 'share') {
+                                    ShareInvoiceBottomSheet.show(context, invoice: inv, profile: profile);
+                                  } else if (action == 'download') {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Preparing invoice for print / download...'),
+                                        duration: Duration(seconds: 1),
+                                        behavior: SnackBarBehavior.floating,
+                                      ),
+                                    );
+                                    await PdfService.printInvoice(inv, profile);
+                                  } else if (action == 'duplicate') {
+                                    _handleDuplicateInvoice(inv);
                                   } else if (action == 'delete') {
                                     _handleDeleteInvoice(inv, displayInvNumber);
                                   }
                                 },
                                 itemBuilder: (context) => [
                                   const PopupMenuItem(
-                                    value: 'duplicate',
+                                    value: 'preview',
                                     child: Row(
                                       children: [
-                                        Icon(Icons.content_copy_rounded, size: 15, color: Color(0xFFFF5722)),
-                                        SizedBox(width: 8),
-                                        Text('Duplicate', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
+                                        Icon(Icons.visibility_outlined, size: 16, color: Color(0xFF64748B)),
+                                        SizedBox(width: 10),
+                                        Text('View', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
                                       ],
                                     ),
                                   ),
                                   const PopupMenuItem(
-                                    value: 'preview',
+                                    value: 'edit',
                                     child: Row(
                                       children: [
-                                        Icon(Icons.visibility_rounded, size: 15, color: Color(0xFF64748B)),
-                                        SizedBox(width: 8),
-                                        Text('View', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+                                        Icon(Icons.edit_outlined, size: 16, color: Color(0xFF64748B)),
+                                        SizedBox(width: 10),
+                                        Text('Edit', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
+                                      ],
+                                    ),
+                                  ),
+                                  const PopupMenuItem(
+                                    value: 'share',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.share_outlined, size: 16, color: Color(0xFF64748B)),
+                                        SizedBox(width: 10),
+                                        Text('Share', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
+                                      ],
+                                    ),
+                                  ),
+                                  const PopupMenuItem(
+                                    value: 'download',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.file_download_outlined, size: 16, color: Color(0xFF64748B)),
+                                        SizedBox(width: 10),
+                                        Text('Download / Print', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
+                                      ],
+                                    ),
+                                  ),
+                                  const PopupMenuItem(
+                                    value: 'duplicate',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.copy_rounded, size: 16, color: Color(0xFFFF5722)),
+                                        SizedBox(width: 10),
+                                        Text('Duplicate', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
                                       ],
                                     ),
                                   ),
@@ -892,8 +987,8 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
                                     value: 'delete',
                                     child: Row(
                                       children: [
-                                        Icon(Icons.delete_outline_rounded, size: 15, color: Color(0xFFEF4444)),
-                                        SizedBox(width: 8),
+                                        Icon(Icons.delete_outline_rounded, size: 16, color: Color(0xFFEF4444)),
+                                        SizedBox(width: 10),
                                         Text('Delete', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFFEF4444))),
                                       ],
                                     ),
@@ -1077,5 +1172,245 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
       return true;
     }
     return false;
+  }
+
+  Widget _buildSortFilterTrigger() {
+    final hasActiveFilter = _selectedSort != 'date_desc' || _selectedDateRange != 'all';
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        _showSortFilterDialog(context);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: hasActiveFilter ? const Color(0xFFFF5722).withValues(alpha: 0.12) : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: hasActiveFilter ? const Color(0xFFFF5722) : const Color(0xFFE2E8F0),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.tune_rounded,
+              size: 15,
+              color: hasActiveFilter ? const Color(0xFFFF5722) : const Color(0xFF64748B),
+            ),
+            const SizedBox(width: 5),
+            Text(
+              'Sort & Filter',
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: hasActiveFilter ? FontWeight.w800 : FontWeight.w600,
+                color: hasActiveFilter ? const Color(0xFFFF5722) : const Color(0xFF64748B),
+              ),
+            ),
+            if (hasActiveFilter) ...[
+              const SizedBox(width: 5),
+              Container(
+                width: 6,
+                height: 6,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFF5722),
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showSortFilterDialog(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+          ),
+          padding: EdgeInsets.fromLTRB(24, 20, 24, MediaQuery.of(ctx).padding.bottom + 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE2E8F0),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Sort & Filter Invoices',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                  if (_selectedSort != 'date_desc' || _selectedDateRange != 'all')
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _selectedSort = 'date_desc';
+                          _selectedDateRange = 'all';
+                        });
+                        setModalState(() {});
+                      },
+                      child: const Text(
+                        'Reset',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFFFF5722),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'SORT BY',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF94A3B8),
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _buildSortChip('Newest First', 'date_desc', setModalState),
+                  _buildSortChip('Oldest First', 'date_asc', setModalState),
+                  _buildSortChip('Amount (High → Low)', 'amount_desc', setModalState),
+                  _buildSortChip('Amount (Low → High)', 'amount_asc', setModalState),
+                ],
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'DATE RANGE',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF94A3B8),
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _buildDateChip('All Time', 'all', setModalState),
+                  _buildDateChip('Past 30 Days', '30d', setModalState),
+                  _buildDateChip('Past 90 Days', '90d', setModalState),
+                  _buildDateChip('This Year', 'year', setModalState),
+                ],
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0F172A),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    elevation: 0,
+                  ),
+                  child: const Text(
+                    'Apply Filters',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSortChip(String label, String value, void Function(void Function()) setModalState) {
+    final isSelected = _selectedSort == value;
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        setState(() => _selectedSort = value);
+        setModalState(() {});
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFFFF5722) : const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? const Color(0xFFFF5722) : const Color(0xFFE2E8F0),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12.5,
+            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+            color: isSelected ? Colors.white : const Color(0xFF475569),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDateChip(String label, String value, void Function(void Function()) setModalState) {
+    final isSelected = _selectedDateRange == value;
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        setState(() => _selectedDateRange = value);
+        setModalState(() {});
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFFFF5722) : const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? const Color(0xFFFF5722) : const Color(0xFFE2E8F0),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12.5,
+            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+            color: isSelected ? Colors.white : const Color(0xFF475569),
+          ),
+        ),
+      ),
+    );
   }
 }

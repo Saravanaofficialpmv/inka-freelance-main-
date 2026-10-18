@@ -86,16 +86,18 @@ class LanguageSettingsScreen extends ConsumerWidget {
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textPrimary, letterSpacing: -0.2),
               ),
             ),
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppColors.cardBorder),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 2)),
-                ],
-              ),
-              child: Column(
+            Material(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppColors.cardBorder),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 2)),
+                  ],
+                ),
+                child: Column(
                 children: languages.asMap().entries.map((entry) {
                   final index = entry.key;
                   final lang = entry.value;
@@ -146,6 +148,7 @@ class LanguageSettingsScreen extends ConsumerWidget {
                 }).toList(),
               ),
             ),
+          ),
           ],
         ),
       ),

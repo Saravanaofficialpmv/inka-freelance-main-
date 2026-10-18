@@ -87,81 +87,84 @@ class HelpSupportScreen extends StatelessWidget {
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textPrimary, letterSpacing: -0.2),
               ),
             ),
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppColors.cardBorder),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 2)),
-                ],
-              ),
-              child: Column(
-                children: [
-                  ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-                    leading: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF22C55E).withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(12),
+            Material(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppColors.cardBorder),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 2)),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                      leading: Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF22C55E).withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF22C55E), size: 24),
                       ),
-                      child: const Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF22C55E), size: 24),
-                    ),
-                    title: const Text('WhatsApp Support', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.textPrimary)),
-                    subtitle: const Text(_supportPhone, style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-                    trailing: OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF22C55E),
-                        side: const BorderSide(color: Color(0xFF22C55E)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      title: const Text('WhatsApp Support', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.textPrimary)),
+                      subtitle: const Text(_supportPhone, style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                      trailing: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF22C55E),
+                          side: const BorderSide(color: Color(0xFF22C55E)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: () {
+                          Clipboard.setData(const ClipboardData(text: _supportPhone));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('WhatsApp number copied to clipboard!'),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        },
+                        child: const Text('Copy'),
                       ),
-                      onPressed: () {
-                        Clipboard.setData(const ClipboardData(text: _supportPhone));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('WhatsApp number copied to clipboard!'),
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      },
-                      child: const Text('Copy'),
                     ),
-                  ),
-                  const Divider(height: 1, indent: 76, endIndent: 20, color: Color(0xFFF1F5F9)),
-                  ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-                    leading: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(12),
+                    const Divider(height: 1, indent: 76, endIndent: 20, color: Color(0xFFF1F5F9)),
+                    ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                      leading: Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.email_outlined, color: AppColors.primary, size: 24),
                       ),
-                      child: const Icon(Icons.email_outlined, color: AppColors.primary, size: 24),
-                    ),
-                    title: const Text('Email Support', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.textPrimary)),
-                    subtitle: const Text(_supportEmail, style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-                    trailing: OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.primary,
-                        side: const BorderSide(color: AppColors.primary),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      title: const Text('Email Support', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.textPrimary)),
+                      subtitle: const Text(_supportEmail, style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                      trailing: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.primary,
+                          side: const BorderSide(color: AppColors.primary),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: () {
+                          Clipboard.setData(const ClipboardData(text: _supportEmail));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Support email copied to clipboard!'),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        },
+                        child: const Text('Copy'),
                       ),
-                      onPressed: () {
-                        Clipboard.setData(const ClipboardData(text: _supportEmail));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Support email copied to clipboard!'),
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      },
-                      child: const Text('Copy'),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
 
@@ -175,16 +178,18 @@ class HelpSupportScreen extends StatelessWidget {
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textPrimary, letterSpacing: -0.2),
               ),
             ),
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppColors.cardBorder),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 2)),
-                ],
-              ),
-              child: Column(
+            Material(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppColors.cardBorder),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 2)),
+                  ],
+                ),
+                child: Column(
                 children: const [
                   ExpansionTile(
                     title: Text('Does Inka work offline?', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
@@ -227,6 +232,7 @@ class HelpSupportScreen extends StatelessWidget {
                 ],
               ),
             ),
+          ),
           ],
         ),
       ),

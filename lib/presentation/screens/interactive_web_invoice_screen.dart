@@ -239,7 +239,7 @@ class _InteractiveWebInvoiceScreenState extends ConsumerState<InteractiveWebInvo
                               final pdfBytes = await PdfService.generateInvoicePdf(invoice!, profile);
                               await Printing.layoutPdf(
                                 onLayout: (_) => pdfBytes,
-                                name: 'Invoice-${invoice.invoiceNumber}.pdf',
+                                name: 'Invoice-${invoice!.invoiceNumber}.pdf',
                               );
                             },
                             child: Container(

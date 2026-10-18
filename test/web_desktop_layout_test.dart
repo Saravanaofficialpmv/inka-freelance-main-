@@ -159,6 +159,14 @@ void main() {
       // Editorial Hero greeting
       expect(find.textContaining('saravana'), findsWidgets);
 
+      // Financial Metrics on Web
+      expect(find.text('Total Revenue'), findsOneWidget);
+      expect(find.text('Pending Payments'), findsOneWidget);
+      expect(find.text('Collected Revenue'), findsOneWidget);
+      expect(find.text('All Time'), findsOneWidget);
+      expect(find.text('This Month'), findsOneWidget);
+      expect(find.text('AI Financial Insights'), findsOneWidget);
+
       // "Start something new" section
       expect(find.text('Start something new'), findsOneWidget);
       expect(find.text('Blank invoice'), findsOneWidget);

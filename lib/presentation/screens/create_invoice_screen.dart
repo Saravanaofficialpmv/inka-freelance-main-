@@ -21,6 +21,8 @@ import '../widgets/device_contact_picker_sheet.dart';
 import '../widgets/milestone_config_sheet.dart';
 import '../widgets/animated_currency_text.dart';
 import '../widgets/voice_waveform_indicator.dart';
+import '../widgets/bouncing_button.dart';
+import '../../core/theme/app_motion.dart';
 
 class CreateInvoiceScreen extends ConsumerStatefulWidget {
   final Invoice? invoiceToEdit;
@@ -86,6 +88,8 @@ class _CreateInvoiceScreenState extends ConsumerState<CreateInvoiceScreen> {
   late stt.SpeechToText _speech;
   bool _isListening = false;
   VoiceState _voiceState = VoiceState.idle;
+  bool _isSaving = false;
+  bool _isSaveSuccess = false;
 
   final _itemNameController = TextEditingController();
   final _itemPriceController = TextEditingController();
@@ -510,18 +514,29 @@ class _CreateInvoiceScreenState extends ConsumerState<CreateInvoiceScreen> {
       paymentProofImage: widget.invoiceToEdit?.paymentProofImage,
     );
 
+    setState(() => _isSaving = true);
+
     if (widget.invoiceToEdit != null) {
       ref.read(invoiceProvider.notifier).updateInvoice(invoice);
     } else {
       ref.read(invoiceProvider.notifier).addInvoice(invoice);
     }
 
-    if (widget.isBottomSheet) {
-      Navigator.pop(context, invoice);
-      context.push('/preview', extra: invoice);
-    } else {
-      context.pushReplacement('/preview', extra: invoice);
-    }
+    setState(() {
+      _isSaving = false;
+      _isSaveSuccess = true;
+    });
+    HapticFeedback.mediumImpact();
+
+    Future.delayed(const Duration(milliseconds: 280), () {
+      if (!mounted) return;
+      if (widget.isBottomSheet) {
+        Navigator.pop(context, invoice);
+        context.push('/preview', extra: invoice);
+      } else {
+        context.pushReplacement('/preview', extra: invoice);
+      }
+    });
   }
 
   @override
@@ -655,7 +670,8 @@ class _CreateInvoiceScreenState extends ConsumerState<CreateInvoiceScreen> {
                   ),
                   const SizedBox(height: 8),
 
-                  GestureDetector(
+                  BouncingButton(
+                    scaleFactor: 0.98,
                     onTap: () async {
                       final Client? selected = await context.push<Client>('/clients-select');
                       if (selected != null) {
@@ -676,66 +692,73 @@ class _CreateInvoiceScreenState extends ConsumerState<CreateInvoiceScreen> {
                           ),
                         ],
                       ),
-                      child: _selectedClient == null
-                          ? Row(
-                              children: [
-                                Container(
-                                  width: 44,
-                                  height: 44,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFFF5722).withValues(alpha: 0.1),
-                                    shape: BoxShape.circle,
+                      child: AnimatedSwitcher(
+                        duration: AppMotion.standard,
+                        switchInCurve: AppMotion.entrance,
+                        switchOutCurve: AppMotion.stateChange,
+                        child: _selectedClient == null
+                            ? Row(
+                                key: const ValueKey('unselected'),
+                                children: [
+                                  Container(
+                                    width: 44,
+                                    height: 44,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFFF5722).withValues(alpha: 0.1),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.person_add_outlined, color: Color(0xFFFF5722), size: 20),
                                   ),
-                                  child: const Icon(Icons.person_add_outlined, color: Color(0xFFFF5722), size: 20),
-                                ),
-                                const SizedBox(width: 14),
-                                const Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text('Select or Add Client', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5, color: Color(0xFF0F172A))),
-                                      SizedBox(height: 2),
-                                      Text('Tap to choose from directory', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-                                    ],
+                                  const SizedBox(width: 14),
+                                  const Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text('Select or Add Client', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5, color: Color(0xFF0F172A))),
+                                        SizedBox(height: 2),
+                                        Text('Tap to choose from directory', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                                const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFF94A3B8)),
-                              ],
-                            )
-                          : Row(
-                              children: [
-                                CircleAvatar(
-                                  radius: 22,
-                                  backgroundColor: const Color(0xFF0F172A),
-                                  child: Text(
-                                    _selectedClient!.name.isNotEmpty ? _selectedClient!.name[0].toUpperCase() : 'C',
-                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                                  const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFF94A3B8)),
+                                ],
+                              )
+                            : Row(
+                                key: ValueKey('client_${_selectedClient!.id}'),
+                                children: [
+                                  CircleAvatar(
+                                    radius: 22,
+                                    backgroundColor: const Color(0xFF0F172A),
+                                    child: Text(
+                                      _selectedClient!.name.isNotEmpty ? _selectedClient!.name[0].toUpperCase() : 'C',
+                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(_selectedClient!.name, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: Color(0xFF0F172A))),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        _selectedClient!.email.isNotEmpty ? _selectedClient!.email : _selectedClient!.phone,
-                                        style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                                      ),
-                                    ],
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(_selectedClient!.name, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: Color(0xFF0F172A))),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          _selectedClient!.email.isNotEmpty ? _selectedClient!.email : _selectedClient!.phone,
+                                          style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF1F5F9),
-                                    borderRadius: BorderRadius.circular(10),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF1F5F9),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: const Text('Change', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
                                   ),
-                                  child: const Text('Change', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
-                                ),
-                              ],
-                            ),
+                                ],
+                              ),
+                      ),
                     ),
                   ),
 
@@ -1307,8 +1330,9 @@ class _CreateInvoiceScreenState extends ConsumerState<CreateInvoiceScreen> {
                         flex: 1,
                         child: SizedBox(
                           height: 50,
-                          child: OutlinedButton(
-                            onPressed: () async {
+                          child: BouncingButton(
+                            scaleFactor: 0.97,
+                            onTap: () async {
                               if (_selectedClient == null || _items.isEmpty) {
                                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Add client & items to preview')));
                                 return;
@@ -1326,11 +1350,18 @@ class _CreateInvoiceScreenState extends ConsumerState<CreateInvoiceScreen> {
                               );
                               await PdfService.shareInvoice(tempInvoice, profile);
                             },
-                            style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: Color(0xFFE2E8F0)),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            child: Container(
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: const Color(0xFFE2E8F0)),
+                              ),
+                              child: const Text(
+                                'Preview',
+                                style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 14),
+                              ),
                             ),
-                            child: const Text('Preview', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 14)),
                           ),
                         ),
                       ),
@@ -1341,16 +1372,20 @@ class _CreateInvoiceScreenState extends ConsumerState<CreateInvoiceScreen> {
                         flex: 2,
                         child: SizedBox(
                           height: 50,
-                          child: ElevatedButton(
-                            onPressed: _saveInvoice,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFFF5722),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                              elevation: 0,
-                            ),
-                            child: Text(
-                              widget.invoiceToEdit != null ? 'Save Changes' : 'Finalise Order',
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 15),
+                          child: BouncingButton(
+                            isLoading: _isSaving,
+                            isSuccess: _isSaveSuccess,
+                            onTap: _isSaving ? null : _saveInvoice,
+                            child: Container(
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: _isSaveSuccess ? const Color(0xFF10B981) : const Color(0xFFFF5722),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Text(
+                                widget.invoiceToEdit != null ? 'Save Changes' : 'Finalise Order',
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 15),
+                              ),
                             ),
                           ),
                         ),

@@ -16,6 +16,8 @@ import '../widgets/draw_signature_sheet.dart';
 import '../widgets/status_badge.dart';
 import '../widgets/pdf_shimmer_skeleton.dart';
 import '../widgets/bouncing_button.dart';
+import '../widgets/animated_currency_text.dart';
+import '../../core/theme/app_motion.dart';
 import '../widgets/celebration_sparkle.dart';
 import '../../services/interactive_invoice_service.dart';
 import '../widgets/milestone_config_sheet.dart';
@@ -106,7 +108,8 @@ class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  GestureDetector(
+                  BouncingButton(
+                    scaleFactor: 0.90,
                     onTap: () => context.canPop() ? context.pop() : context.go('/dashboard'),
                     child: Container(
                       width: 44,
@@ -137,7 +140,8 @@ class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
                   ),
                   Row(
                     children: [
-                      GestureDetector(
+                      BouncingButton(
+                        scaleFactor: 0.90,
                         onTap: () => _handleDuplicateInvoice(currentInvoice),
                         child: Container(
                           width: 44,
@@ -151,7 +155,8 @@ class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      GestureDetector(
+                      BouncingButton(
+                        scaleFactor: 0.90,
                         onTap: () async {
                           final applied = await DrawSignatureBottomSheet.show(context);
                           if (applied == true && mounted) {
@@ -183,7 +188,8 @@ class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      GestureDetector(
+                      BouncingButton(
+                        scaleFactor: 0.90,
                         onTap: () {
                           PaymentQrSheet.show(
                             context,
@@ -315,10 +321,16 @@ class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
               ),
             ),
 
-            if (_selectedViewTab == 1)
-              Expanded(
-                child: Column(
-                  children: [
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: AppMotion.navigation,
+                switchInCurve: AppMotion.entrance,
+                switchOutCurve: AppMotion.stateChange,
+                transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
+                child: _selectedViewTab == 1
+                    ? Column(
+                        key: const ValueKey('view_tab_pdf'),
+                        children: [
                     // Template Selector Bar
                     Container(
                       padding: const EdgeInsets.symmetric(vertical: 6),
@@ -478,12 +490,10 @@ class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
                         ),
                       ),
                     ),
-                  ],
-                ),
-              )
-            else
-              Expanded(
-                child: SingleChildScrollView(
+                        ],
+                      )
+                    : SingleChildScrollView(
+                        key: const ValueKey('view_tab_summary'),
                   physics: const BouncingScrollPhysics(),
                   padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
                   child: Column(
@@ -799,12 +809,12 @@ class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
                       ),
                       child: Column(
                         children: [
-                          _buildSummaryLine('Subtotal', currencyFormat.format(subtotal)),
+                          _buildAnimatedSummaryLine('Subtotal', subtotal, currencyFormat),
                           const SizedBox(height: 8),
-                          _buildSummaryLine('Tax (${currentInvoice.taxPercentage.toInt()}%)', currencyFormat.format(taxAmount)),
+                          _buildAnimatedSummaryLine('Tax (${currentInvoice.taxPercentage.toInt()}%)', taxAmount, currencyFormat),
                           if (discountAmount > 0) ...[
                             const SizedBox(height: 8),
-                            _buildSummaryLine('Discount', '-${currencyFormat.format(discountAmount)}'),
+                            _buildAnimatedSummaryLine('Discount', discountAmount, currencyFormat, prefix: '-'),
                           ],
                           const SizedBox(height: 12),
                           const Divider(height: 1, color: Color(0xFFE2E8F0)),
@@ -816,8 +826,9 @@ class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
                                 'Grand total',
                                 style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15.5, color: Color(0xFF0F172A)),
                               ),
-                              Text(
-                                currencyFormat.format(grandTotal),
+                              AnimatedCurrencyText(
+                                value: grandTotal,
+                                formatter: currencyFormat,
                                 style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: Color(0xFF0F172A)),
                               ),
                             ],
@@ -922,6 +933,7 @@ class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
                 ),
               ),
             ),
+          ),
 
             // ── Sticky Bottom Buttons Row (Download invoice + Share invoice) ──
             Container(
@@ -1011,12 +1023,19 @@ class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
     );
   }
 
-  Widget _buildSummaryLine(String title, String value) {
+
+
+  Widget _buildAnimatedSummaryLine(String title, double amount, NumberFormat format, {String? prefix}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(title, style: const TextStyle(fontSize: 13, color: Color(0xFF64748B), fontWeight: FontWeight.w500)),
-        Text(value, style: const TextStyle(fontSize: 13.5, color: Color(0xFF0F172A), fontWeight: FontWeight.w700)),
+        AnimatedCurrencyText(
+          value: amount,
+          formatter: format,
+          prefix: prefix,
+          style: const TextStyle(fontSize: 13.5, color: Color(0xFF0F172A), fontWeight: FontWeight.w700),
+        ),
       ],
     );
   }
