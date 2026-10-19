@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter/services.dart';
 import '../../core/theme/app_motion.dart';
 import '../../core/constants/colors.dart';
 import 'custom_bottom_nav.dart';
 import 'web_sidebar.dart';
+import 'command_palette_dialog.dart';
+import 'invite_members_dialog.dart';
 import '../providers/auth_provider.dart';
 import '../providers/profile_provider.dart';
 import '../providers/subscription_provider.dart';
@@ -21,18 +24,18 @@ class NavShell extends ConsumerWidget {
     final location = state.matchedLocation;
     final isWide = MediaQuery.sizeOf(context).width >= 900;
     final bool reducedMotion = AppMotion.isReducedMotion(context);
-    int currentIndex = 0;
-
+    // ── Desktop WebSidebar Active Index ──
+    int webIndex = 0;
     if (location.startsWith('/dashboard')) {
-      currentIndex = 0;
+      webIndex = 0;
     } else if (location.startsWith('/history') || location.startsWith('/preview')) {
-      currentIndex = 1;
+      webIndex = 1;
     } else if (location.startsWith('/clients') ||
         location.startsWith('/client-details') ||
         location.startsWith('/clients-tab')) {
-      currentIndex = 2;
+      webIndex = 2;
     } else if (location.startsWith('/expenses')) {
-      currentIndex = 3;
+      webIndex = 3;
     } else if (location.startsWith('/profile') ||
         location.startsWith('/company-details') ||
         location.startsWith('/bank-details') ||
@@ -46,24 +49,40 @@ class NavShell extends ConsumerWidget {
         location.startsWith('/help-support') ||
         location.startsWith('/privacy-policy') ||
         location.startsWith('/products')) {
-      currentIndex = 4;
+      webIndex = 4;
     } else {
-      currentIndex = -1;
+      webIndex = -1;
     }
+
+    // ── Mobile Bottom Navigation Active Index ──
+    // ONLY the 5 root tabs display the bottom navigation bar on mobile.
+    // All detail/sub-screens (company-details, bank-details, signatures, preview, etc.)
+    // MUST NOT display the bottom bar so their bottom buttons/keys ("Save", "Share", etc.) are never obscured.
+    int mobileIndex = -1;
+    if (location == '/dashboard') {
+      mobileIndex = 0;
+    } else if (location == '/history') {
+      mobileIndex = 1;
+    } else if (location == '/clients' || location == '/clients-tab') {
+      mobileIndex = 2;
+    } else if (location == '/expenses' || location == '/statistics') {
+      mobileIndex = 3;
+    } else if (location == '/profile' || location == '/settings' || location == '/products') {
+      mobileIndex = 4;
+    } else {
+      mobileIndex = -1;
+    }
+
+    final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+    final bool isKeyboardOpen = keyboardInset > 0;
+    final bool showMobileBottomNav = !isWide && mobileIndex >= 0 && !isKeyboardOpen;
 
     final Widget animatedContent = AnimatedSwitcher(
       duration: reducedMotion ? Duration.zero : AppMotion.navigation,
       switchInCurve: AppMotion.entrance,
       switchOutCurve: AppMotion.stateChange,
       layoutBuilder: (currentChild, previousChildren) {
-        return Stack(
-          fit: StackFit.expand,
-          alignment: Alignment.topLeft,
-          children: <Widget>[
-            ...previousChildren,
-            ?currentChild,
-          ],
-        );
+        return currentChild ?? const SizedBox.shrink();
       },
       transitionBuilder: (child, animation) {
         if (reducedMotion) return child;
@@ -84,65 +103,80 @@ class NavShell extends ConsumerWidget {
       ),
     );
 
-    if (isWide) {
-      return Scaffold(
-        backgroundColor: AppColors.background, // Miro-inspired outer frame background
-        body: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            WebSidebar(
-              currentLocation: location,
-              currentIndex: currentIndex,
-            ),
-            Expanded(
-              child: Container(
-                margin: const EdgeInsets.fromLTRB(4, 10, 14, 12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: AppColors.border,
-                    width: 1.0,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.02),
-                      blurRadius: 10,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _WebCanvasTopBar(currentLocation: location),
-                    const Divider(height: 1, thickness: 1, color: Color(0xFFF1F3F5)),
-                    Expanded(
-                      child: animatedContent,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
+    final Widget desktopCanvas = KeyedSubtree(
+      key: ValueKey(location),
+      child: child,
+    );
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
-      body: Stack(
-        children: [
-          animatedContent,
-          if (currentIndex >= 0)
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: CustomBottomNav(currentIndex: currentIndex),
+    final Widget shellBody = isWide
+        ? Scaffold(
+            backgroundColor: AppColors.background, // Miro-inspired outer frame background
+            body: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                WebSidebar(
+                  currentLocation: location,
+                  currentIndex: webIndex,
+                ),
+                Expanded(
+                  child: Container(
+                    margin: const EdgeInsets.fromLTRB(4, 10, 14, 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: AppColors.border,
+                        width: 1.0,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.02),
+                          blurRadius: 10,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _WebCanvasTopBar(currentLocation: location),
+                        const Divider(height: 1, thickness: 1, color: Color(0xFFF1F3F5)),
+                        Expanded(
+                          child: desktopCanvas,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
-        ],
+          )
+        : Scaffold(
+            backgroundColor: const Color(0xFFF7F8FA),
+            resizeToAvoidBottomInset: false,
+            body: Stack(
+              children: [
+                Positioned.fill(child: animatedContent),
+                if (showMobileBottomNav)
+                  Positioned(
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    child: CustomBottomNav(currentIndex: mobileIndex),
+                  ),
+              ],
+            ),
+          );
+
+    return CallbackShortcuts(
+      bindings: <ShortcutActivator, VoidCallback>{
+        const SingleActivator(LogicalKeyboardKey.keyK, meta: true): () => CommandPaletteDialog.show(context),
+        const SingleActivator(LogicalKeyboardKey.keyK, control: true): () => CommandPaletteDialog.show(context),
+      },
+      child: Focus(
+        autofocus: true,
+        child: shellBody,
       ),
     );
   }
@@ -270,38 +304,26 @@ class _WebCanvasTopBar extends ConsumerWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     // 1. Invite members button
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            behavior: SnackBarBehavior.floating,
-                            backgroundColor: AppColors.textPrimary,
-                            content: Row(
-                              children: [
-                                Icon(Icons.check_circle, color: AppColors.success, size: 18),
-                                SizedBox(width: 10),
-                                Text('Workspace invite link copied to clipboard!'),
-                              ],
-                            ),
-                            duration: Duration(seconds: 2),
+                    MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: OutlinedButton.icon(
+                        onPressed: () => InviteMembersDialog.show(context),
+                        icon: const Icon(Icons.person_add_outlined, size: 14, color: AppColors.textPrimary),
+                        label: const Text(
+                          'Invite members',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
                           ),
-                        );
-                      },
-                      icon: const Icon(Icons.person_add_outlined, size: 14, color: AppColors.textPrimary),
-                      label: const Text(
-                        'Invite members',
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
                         ),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        backgroundColor: const Color(0xFFF9FAFB),
-                        side: const BorderSide(color: AppColors.border),
-                        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8.5),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        elevation: 0,
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: const Color(0xFFF9FAFB),
+                          side: const BorderSide(color: AppColors.border),
+                          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8.5),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          elevation: 0,
+                        ),
                       ),
                     ),
 

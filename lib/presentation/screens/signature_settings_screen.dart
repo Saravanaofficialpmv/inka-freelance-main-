@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../core/constants/colors.dart';
 import '../../core/utils/navigation_utils.dart';
 import '../../core/localization/app_localizations.dart';
@@ -43,6 +44,21 @@ class _SignatureSettingsScreenState extends ConsumerState<SignatureSettingsScree
     final picker = ImagePicker();
     final image = await picker.pickImage(source: ImageSource.gallery);
     if (image != null) {
+      if (!kIsWeb) {
+        try {
+          final appDir = await getApplicationDocumentsDirectory();
+          if (!appDir.existsSync()) {
+            appDir.createSync(recursive: true);
+          }
+          final ext = image.path.contains('.') ? image.path.split('.').last : 'png';
+          final targetPath = '${appDir.path}/signature_upload_${DateTime.now().millisecondsSinceEpoch}.$ext';
+          final savedFile = await File(image.path).copy(targetPath);
+          setState(() {
+            _uploadedImagePath = savedFile.path;
+          });
+          return;
+        } catch (_) {}
+      }
       setState(() {
         _uploadedImagePath = image.path;
       });
@@ -269,9 +285,7 @@ class _SignatureSettingsScreenState extends ConsumerState<SignatureSettingsScree
                             Container(
                               height: 60,
                               constraints: const BoxConstraints(maxWidth: 220),
-                              child: (kIsWeb || _currentSavedPath!.startsWith('http'))
-                                  ? Image.network(_currentSavedPath!, fit: BoxFit.contain)
-                                  : Image.file(File(_currentSavedPath!), fit: BoxFit.contain),
+                              child: _buildSignatureDisplayWidget(_currentSavedPath!),
                             ),
                             const SizedBox(height: 6),
                             Container(width: 140, height: 1, color: const Color(0xFFCBD5E1)),
@@ -501,7 +515,7 @@ class _SignatureSettingsScreenState extends ConsumerState<SignatureSettingsScree
                               borderRadius: BorderRadius.circular(10),
                               border: Border.all(color: AppColors.cardBorder),
                             ),
-                            child: Image.file(File(_uploadedImagePath!), fit: BoxFit.contain),
+                            child: _buildSignatureDisplayWidget(_uploadedImagePath!),
                           ),
                           const SizedBox(height: 12),
                           const Text('Tap to change image', style: TextStyle(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.bold)),
@@ -577,6 +591,41 @@ class _SignatureSettingsScreenState extends ConsumerState<SignatureSettingsScree
                   ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildSignatureDisplayWidget(String path) {
+    if (kIsWeb || path.startsWith('http://') || path.startsWith('https://')) {
+      return Image.network(
+        path,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) => _buildSignatureErrorPlaceholder(),
+      );
+    }
+    final file = File(path);
+    if (!file.existsSync()) {
+      return _buildSignatureErrorPlaceholder();
+    }
+    return Image.file(
+      file,
+      fit: BoxFit.contain,
+      errorBuilder: (context, error, stackTrace) => _buildSignatureErrorPlaceholder(),
+    );
+  }
+
+  Widget _buildSignatureErrorPlaceholder() {
+    return Center(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: const [
+          Icon(Icons.draw_outlined, size: 18, color: AppColors.textMuted),
+          SizedBox(width: 6),
+          Text(
+            'Signature image not found',
+            style: TextStyle(fontSize: 12, color: AppColors.textMuted, fontWeight: FontWeight.w500),
+          ),
+        ],
       ),
     );
   }

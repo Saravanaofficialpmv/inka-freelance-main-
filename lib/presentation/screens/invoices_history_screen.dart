@@ -16,8 +16,111 @@ import '../widgets/celebration_sparkle.dart';
 import '../widgets/sync_status_badge.dart';
 import 'create_invoice_screen.dart';
 import '../../core/theme/theme_helper.dart';
-import '../../services/pdf_service.dart';
 import '../widgets/share_invoice_bottom_sheet.dart';
+import '../widgets/payment_qr_sheet.dart';
+import '../../data/models/business_profile.dart';
+import '../../services/pdf_service.dart';
+
+class InvoiceHealthData {
+  final int score;
+  final String tier;
+  final Color color;
+  final Color bgColor;
+  final List<Invoice> paidInvoices;
+  final List<Invoice> overdueInvoices;
+  final List<Invoice> pendingInvoices;
+  final double paidAmount;
+  final double overdueAmount;
+  final double pendingAmount;
+  final double totalAmount;
+  final int numActivePills;
+
+  const InvoiceHealthData({
+    required this.score,
+    required this.tier,
+    required this.color,
+    required this.bgColor,
+    required this.paidInvoices,
+    required this.overdueInvoices,
+    required this.pendingInvoices,
+    required this.paidAmount,
+    required this.overdueAmount,
+    required this.pendingAmount,
+    required this.totalAmount,
+    required this.numActivePills,
+  });
+
+  static InvoiceHealthData calculate(List<Invoice> invoices, {DateTime? now}) {
+    final currentDate = now ?? DateTime.now();
+    final paidInvoices = invoices.where((i) => i.isPaid).toList();
+    final overdueInvoices = invoices.where((i) {
+      if (i.isPaid) return false;
+      return i.status.toLowerCase() == 'overdue' || i.dueDate.isBefore(currentDate);
+    }).toList();
+    final pendingInvoices = invoices.where((i) {
+      if (i.isPaid) return false;
+      return !overdueInvoices.contains(i);
+    }).toList();
+
+    final totalCount = invoices.length;
+    final totalAmount = invoices.fold<double>(0.0, (sum, i) => sum + i.total);
+    final paidAmount = paidInvoices.fold<double>(0.0, (sum, i) => sum + i.total);
+    final overdueAmount = overdueInvoices.fold<double>(0.0, (sum, i) => sum + i.total);
+    final pendingAmount = pendingInvoices.fold<double>(0.0, (sum, i) => sum + i.total);
+
+    final int healthScore;
+    if (totalCount == 0 || (overdueInvoices.isEmpty && pendingInvoices.isEmpty)) {
+      healthScore = 100;
+    } else {
+      final pendingValueRatio = totalAmount > 0 ? (pendingAmount / totalAmount) : 0.0;
+      final overdueValueRatio = totalAmount > 0 ? (overdueAmount / totalAmount) : 0.0;
+      final overdueCountRatio = overdueInvoices.length / totalCount;
+
+      final calculated = 100.0 - (pendingValueRatio * 15.0) - (overdueValueRatio * 60.0) - (overdueCountRatio * 20.0);
+      healthScore = calculated.round().clamp(0, 100);
+    }
+
+    final String healthTier;
+    final Color healthColor;
+    final Color healthBgColor;
+    if (healthScore >= 85) {
+      healthTier = 'Great';
+      healthColor = const Color(0xFF10B981);
+      healthBgColor = const Color(0xFFECFDF5);
+    } else if (healthScore >= 65) {
+      healthTier = 'Good';
+      healthColor = const Color(0xFF007BFF);
+      healthBgColor = const Color(0xFFEFF6FF);
+    } else if (healthScore >= 40) {
+      healthTier = 'Warning';
+      healthColor = const Color(0xFFF59E0B);
+      healthBgColor = const Color(0xFFFFFBEB);
+    } else {
+      healthTier = 'Bad';
+      healthColor = const Color(0xFFEF4444);
+      healthBgColor = const Color(0xFFFEF2F2);
+    }
+
+    final numActivePills = healthScore == 0
+        ? 0
+        : ((healthScore / 100.0) * 8).round().clamp(1, 8);
+
+    return InvoiceHealthData(
+      score: healthScore,
+      tier: healthTier,
+      color: healthColor,
+      bgColor: healthBgColor,
+      paidInvoices: paidInvoices,
+      overdueInvoices: overdueInvoices,
+      pendingInvoices: pendingInvoices,
+      paidAmount: paidAmount,
+      overdueAmount: overdueAmount,
+      pendingAmount: pendingAmount,
+      totalAmount: totalAmount,
+      numActivePills: numActivePills,
+    );
+  }
+}
 
 class InvoicesHistoryScreen extends ConsumerStatefulWidget {
   final String? initialStatusFilter;
@@ -58,8 +161,35 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
   }
 
   void _showAdviceBottomSheet(List<Invoice> invoices, dynamic currencyFormat) {
-    final unpaidInvoices = invoices.where((i) => i.status.toLowerCase() != 'paid').toList();
-    final totalUnpaid = unpaidInvoices.fold<double>(0, (sum, i) => sum + i.total);
+    final profile = ref.read(profileProvider);
+    final healthData = InvoiceHealthData.calculate(invoices);
+
+    _showHealthBreakdownSheet(
+      invoices: invoices,
+      profile: profile,
+      currencyFormat: currencyFormat,
+      healthData: healthData,
+    );
+  }
+
+  void _showHealthBreakdownSheet({
+    required List<Invoice> invoices,
+    required BusinessProfile profile,
+    required dynamic currencyFormat,
+    required InvoiceHealthData healthData,
+  }) {
+    final unpaidCount = healthData.overdueInvoices.length + healthData.pendingInvoices.length;
+    final overdueInvoices = healthData.overdueInvoices;
+    final pendingInvoices = healthData.pendingInvoices;
+    final paidInvoices = healthData.paidInvoices;
+    final overdueAmount = healthData.overdueAmount;
+    final pendingAmount = healthData.pendingAmount;
+    final paidAmount = healthData.paidAmount;
+    final totalAmount = healthData.totalAmount;
+    final healthScore = healthData.score;
+    final healthTier = healthData.tier;
+    final healthColor = healthData.color;
+    final healthBgColor = healthData.bgColor;
 
     showModalBottomSheet(
       context: context,
@@ -67,89 +197,329 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (ctx) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+        decoration: BoxDecoration(
+          color: context.cardBg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
         ),
-        padding: EdgeInsets.fromLTRB(24, 20, 24, MediaQuery.of(ctx).padding.bottom + 24),
+        padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.of(ctx).padding.bottom + 24),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4.5,
+                  decoration: BoxDecoration(color: context.cardBorder, borderRadius: BorderRadius.circular(3)),
+                ),
+              ),
+              const SizedBox(height: 18),
+
+              // Header Row with Score Ring and Tier Badge
+              Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: healthBgColor,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: healthColor.withValues(alpha: 0.35), width: 1.5),
+                    ),
+                    child: Center(
+                      child: Text(
+                        '$healthScore',
+                        style: TextStyle(
+                          color: healthColor,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 18,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                'Invoice Health',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: context.textPrimary),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                              decoration: BoxDecoration(
+                                color: healthBgColor,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: healthColor.withValues(alpha: 0.3)),
+                              ),
+                              child: Text(
+                                healthTier,
+                                style: TextStyle(color: healthColor, fontSize: 11, fontWeight: FontWeight.w800),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          overdueInvoices.isNotEmpty
+                              ? '${overdueInvoices.length} overdue bill${overdueInvoices.length > 1 ? 's' : ''} require attention'
+                              : (pendingInvoices.isNotEmpty ? '${pendingInvoices.length} pending bill${pendingInvoices.length > 1 ? 's' : ''} in pipeline' : 'All invoices fully settled'),
+                          style: TextStyle(fontSize: 12.5, color: context.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    icon: Icon(Icons.close_rounded, color: context.textSecondary, size: 22),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+
+              // ── 4-Metric Grid (Interactive) ──
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildHealthMetricCard(
+                      title: 'Paid Revenue',
+                      amount: currencyFormat.format(paidAmount),
+                      countLabel: '${paidInvoices.length} paid',
+                      color: const Color(0xFF10B981),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        setState(() => _selectedStatusFilter = 'Paid');
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _buildHealthMetricCard(
+                      title: 'Overdue Dues',
+                      amount: currencyFormat.format(overdueAmount),
+                      countLabel: '${overdueInvoices.length} overdue',
+                      color: overdueInvoices.isNotEmpty ? const Color(0xFFEF4444) : const Color(0xFF94A3B8),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        setState(() => _selectedStatusFilter = 'Unpaid');
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildHealthMetricCard(
+                      title: 'Pending Bills',
+                      amount: currencyFormat.format(pendingAmount),
+                      countLabel: '${pendingInvoices.length} pending',
+                      color: const Color(0xFF007BFF),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        setState(() => _selectedStatusFilter = 'Unpaid');
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _buildHealthMetricCard(
+                      title: 'Collection Rate',
+                      amount: '${totalAmount > 0 ? ((paidAmount / totalAmount) * 100).toInt() : 100}%',
+                      countLabel: 'of ${currencyFormat.format(totalAmount)}',
+                      color: const Color(0xFFFF5722),
+                      onTap: null,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+
+              // ── Actionable Tasks ──
+              if (overdueInvoices.isNotEmpty) ...[
+                for (final overdueInv in overdueInvoices.take(3)) ...[
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: context.isDarkMode ? const Color(0xFF2D1515) : const Color(0xFFFEF2F2),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: context.isDarkMode ? const Color(0xFF5A1E1E) : const Color(0xFFFECACA)),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEF4444).withValues(alpha: 0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.alarm_rounded, color: Color(0xFFEF4444), size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Remind ${overdueInv.client.name}',
+                                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5, color: context.textPrimary),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Send 1-tap WhatsApp reminder for #${overdueInv.invoiceNumber} (${currencyFormat.format(overdueInv.total)})',
+                                style: TextStyle(fontSize: 11.5, color: context.textSecondary),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            ShareInvoiceBottomSheet.show(context, invoice: overdueInv, profile: profile);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFEF4444),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text('Remind', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                if (overdueInvoices.length > 3)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10, left: 4),
+                    child: Text(
+                      '+ ${overdueInvoices.length - 3} more overdue invoices',
+                      style: TextStyle(fontSize: 11.5, color: context.textSecondary, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+              ],
+
+              _buildAdviceTile(
+                icon: Icons.qr_code_2_rounded,
+                title: 'Include Instant Payment QR',
+                description: 'Direct UPI/Bank QR on the invoice eliminates client friction and drives 70% quicker settlement.',
+                color: const Color(0xFFFF5722),
+                actionLabel: 'Setup QR',
+                onAction: () {
+                  Navigator.pop(ctx);
+                  PaymentQrSheet.show(context, profile: profile);
+                },
+              ),
+              const SizedBox(height: 12),
+
+              _buildAdviceTile(
+                icon: Icons.timer_outlined,
+                title: 'Shorten Payment Terms to 14 Days',
+                description: 'Invoices with 14-day terms are paid 42% quicker than 30-day terms for freelancers.',
+                color: const Color(0xFF007BFF),
+              ),
+              const SizedBox(height: 20),
+
+              // Bottom Primary Action
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    if (unpaidCount > 0) {
+                      setState(() => _selectedStatusFilter = 'Unpaid');
+                    } else {
+                      CreateInvoiceScreen.showAsBottomSheet(context);
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF5722),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    elevation: 0,
+                  ),
+                  child: Text(
+                    unpaidCount > 0 ? 'Filter & Review $unpaidCount Unpaid Invoices' : 'Create New Invoice',
+                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14.5),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHealthMetricCard({
+    required String title,
+    required String amount,
+    required String countLabel,
+    required Color color,
+    VoidCallback? onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: context.isDarkMode ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: context.cardBorder),
+        ),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(color: const Color(0xFFE2E8F0), borderRadius: BorderRadius.circular(2)),
-              ),
-            ),
-            const SizedBox(height: 18),
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFF5722).withValues(alpha: 0.12),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.auto_awesome_rounded, color: Color(0xFFFF5722), size: 22),
-                ),
-                const SizedBox(width: 14),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'AI Invoice Health Advice',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
-                      ),
-                      Text(
-                        'Optimizations to get paid 3x faster',
-                        style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
-                      ),
-                    ],
+                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: context.textSecondary),
                   ),
                 ),
+                if (onTap != null) ...[
+                  const SizedBox(width: 4),
+                  Icon(Icons.arrow_forward_ios_rounded, size: 10, color: context.textSecondary),
+                ],
               ],
             ),
-            const SizedBox(height: 20),
-            _buildAdviceTile(
-              icon: Icons.mark_chat_unread_outlined,
-              title: 'Send WhatsApp Friendly Reminders',
-              description: 'You have ${unpaidInvoices.length} unpaid invoices totaling ${currencyFormat.format(totalUnpaid)}. Sending an instant WhatsApp reminder with UPI QR can recover 70% of dues within 24 hours.',
-              color: const Color(0xFF10B981),
-            ),
-            const SizedBox(height: 12),
-            _buildAdviceTile(
-              icon: Icons.timer_outlined,
-              title: 'Shorten Payment Terms to 14 Days',
-              description: 'Invoices with 14-day terms are paid 42% quicker than 30-day terms for freelancers.',
-              color: const Color(0xFF007BFF),
-            ),
-            const SizedBox(height: 12),
-            _buildAdviceTile(
-              icon: Icons.qr_code_2_rounded,
-              title: 'Include Instant Payment QR',
-              description: 'Direct UPI/Bank QR on the invoice PDF eliminates friction for Indian and global clients.',
-              color: const Color(0xFFFF5722),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(ctx),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF5722),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  elevation: 0,
-                ),
-                child: const Text(
-                  'Got it, thanks!',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 15),
-                ),
+            const SizedBox(height: 4),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                amount,
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: color),
               ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              countLabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 11, color: context.textSecondary, fontWeight: FontWeight.w500),
             ),
           ],
         ),
@@ -162,29 +532,51 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
     required String title,
     required String description,
     required Color color,
+    String? actionLabel,
+    VoidCallback? onAction,
   }) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+        color: context.isDarkMode ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: context.cardBorder),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: color, size: 20),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 18),
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5, color: Color(0xFF0F172A))),
-                const SizedBox(height: 4),
-                Text(description, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.35)),
+                Text(title, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5, color: context.textPrimary)),
+                const SizedBox(height: 3),
+                Text(description, style: TextStyle(fontSize: 12, color: context.textSecondary, height: 1.35)),
               ],
             ),
           ),
+          if (actionLabel != null && onAction != null) ...[
+            const SizedBox(width: 8),
+            TextButton(
+              onPressed: onAction,
+              style: TextButton.styleFrom(
+                foregroundColor: color,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: Text(actionLabel, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
+            ),
+          ],
         ],
       ),
     );
@@ -201,10 +593,8 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
     );
 
     // Calculate metrics
-    final unpaidCount = invoices.where((i) => i.status.toLowerCase() != 'paid').length;
-    final paidCount = invoices.where((i) => i.status.toLowerCase() == 'paid').length;
-    final totalCount = invoices.length;
-    final healthScore = totalCount == 0 ? 100 : ((paidCount / totalCount) * 100).round().clamp(20, 100);
+    final healthData = InvoiceHealthData.calculate(invoices);
+    final unpaidCount = healthData.overdueInvoices.length + healthData.pendingInvoices.length;
 
     // Unique favorite clients from recent invoices
     final Map<String, Invoice> clientRecentMap = {};
@@ -370,178 +760,255 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ── Invoice Health Card (From Mockup) ──
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(26),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.03),
-                      blurRadius: 14,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Invoice Health',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFF0F172A),
-                          ),
-                        ),
-                        IconButton(
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                          icon: const Icon(Icons.more_horiz_rounded, color: Color(0xFF94A3B8)),
-                          onPressed: () => _showAdviceBottomSheet(invoices, currencyFormat),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.baseline,
-                          textBaseline: TextBaseline.alphabetic,
-                          children: [
-                            Text(
-                              '$healthScore',
-                              style: const TextStyle(
-                                fontSize: 34,
-                                fontWeight: FontWeight.w900,
-                                color: Color(0xFF0F172A),
-                                letterSpacing: -1,
-                              ),
-                            ),
-                            const Text(
-                              '/100',
-                              style: TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF94A3B8),
-                              ),
+                    // ── Invoice Health Card (Interactive) ──
+                    GestureDetector(
+                      onTap: () => _showAdviceBottomSheet(invoices, currencyFormat),
+                      child: Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: context.cardBg,
+                          borderRadius: BorderRadius.circular(26),
+                          border: Border.all(color: context.cardBorder),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: context.isDarkMode ? 0.2 : 0.03),
+                              blurRadius: 14,
+                              offset: const Offset(0, 4),
                             ),
                           ],
                         ),
-                        Text(
-                          '$unpaidCount Unpaid Invoices',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF64748B),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // ── 8-Pill Color Health Meter with Floating Tooltip ──
-                    Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Row(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _buildHealthPill(const Color(0xFFEF4444)), // Bad
-                            const SizedBox(width: 5),
-                            _buildHealthPill(const Color(0xFFEF4444)), // Bad
-                            const SizedBox(width: 5),
-                            _buildHealthPill(const Color(0xFFF59E0B)), // Warning
-                            const SizedBox(width: 5),
-                            _buildHealthPill(const Color(0xFFF59E0B)), // Warning
-                            const SizedBox(width: 5),
-                            _buildHealthPill(const Color(0xFF007BFF)), // Good
-                            const SizedBox(width: 5),
-                            _buildHealthPill(const Color(0xFF007BFF)), // Good
-                            const SizedBox(width: 5),
-                            _buildHealthPill(const Color(0xFF10B981)), // Great
-                            const SizedBox(width: 5),
-                            _buildHealthPill(const Color(0xFF10B981)), // Great
-                          ],
-                        ),
-
-                        // Tooltip indicator pill
-                        Positioned(
-                          top: -24,
-                          left: MediaQuery.of(context).size.width * 0.44,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF9BD71B),
-                              borderRadius: BorderRadius.circular(10),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Row(
+                                    children: [
+                                      Flexible(
+                                        child: Text(
+                                          'Invoice Health',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w800,
+                                            color: context.textPrimary,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                                        decoration: BoxDecoration(
+                                          color: healthData.bgColor,
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(color: healthData.color.withValues(alpha: 0.3)),
+                                        ),
+                                        child: Text(
+                                          healthData.tier,
+                                          style: TextStyle(
+                                            color: healthData.color,
+                                            fontSize: 10.5,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                IconButton(
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                  icon: Icon(Icons.more_horiz_rounded, color: context.textSecondary),
+                                  onPressed: () => _showAdviceBottomSheet(invoices, currencyFormat),
+                                ),
+                              ],
                             ),
-                            child: Text(
-                              '$healthScore',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w900,
-                                color: Color(0xFF0F172A),
+                            const SizedBox(height: 8),
+
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              crossAxisAlignment: CrossAxisAlignment.baseline,
+                              textBaseline: TextBaseline.alphabetic,
+                              children: [
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                                  textBaseline: TextBaseline.alphabetic,
+                                  children: [
+                                    Text(
+                                      '${healthData.score}',
+                                      style: TextStyle(
+                                        fontSize: 34,
+                                        fontWeight: FontWeight.w900,
+                                        color: context.textPrimary,
+                                        letterSpacing: -1,
+                                      ),
+                                    ),
+                                    Text(
+                                      '/100',
+                                      style: TextStyle(
+                                        fontSize: 17,
+                                        fontWeight: FontWeight.bold,
+                                        color: context.textSecondary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(width: 8),
+                                Flexible(
+                                  child: Text(
+                                    '$unpaidCount Unpaid Invoices',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    textAlign: TextAlign.end,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: context.textSecondary,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(height: 16),
+
+                            // ── 8-Pill Color Health Meter with Floating Tooltip ──
+                            LayoutBuilder(
+                              builder: (context, constraints) {
+                                const pillWidth = 36.0;
+                                final availableWidth = (constraints.maxWidth - pillWidth).clamp(0.0, double.infinity);
+                                final leftPos = ((healthData.score / 100.0) * availableWidth).clamp(0.0, availableWidth);
+                                final inactiveColor = context.isDarkMode ? const Color(0xFF334155) : const Color(0xFFE2E8F0);
+
+                                return SizedBox(
+                                  height: 42,
+                                  child: Stack(
+                                    clipBehavior: Clip.none,
+                                    children: [
+                                      // Floating animated tooltip indicator
+                                      AnimatedPositioned(
+                                        duration: const Duration(milliseconds: 350),
+                                        curve: Curves.easeOutCubic,
+                                        left: leftPos,
+                                        top: 0,
+                                        child: SizedBox(
+                                          width: pillWidth,
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            crossAxisAlignment: CrossAxisAlignment.center,
+                                            children: [
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
+                                                decoration: BoxDecoration(
+                                                  color: healthData.color,
+                                                  borderRadius: BorderRadius.circular(8),
+                                                  boxShadow: [
+                                                    BoxShadow(
+                                                      color: healthData.color.withValues(alpha: 0.35),
+                                                      blurRadius: 6,
+                                                      offset: const Offset(0, 2),
+                                                    ),
+                                                  ],
+                                                ),
+                                                child: Text(
+                                                  '${healthData.score}',
+                                                  style: const TextStyle(
+                                                    fontSize: 10.5,
+                                                    fontWeight: FontWeight.w900,
+                                                    color: Colors.white,
+                                                  ),
+                                                ),
+                                              ),
+                                              CustomPaint(
+                                                size: const Size(8, 4),
+                                                painter: _TrianglePointerPainter(color: healthData.color),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+
+                                      // 8-Pill Row
+                                      Positioned(
+                                        left: 0,
+                                        right: 0,
+                                        bottom: 0,
+                                        height: 14,
+                                        child: Row(
+                                          children: [
+                                            _buildHealthPill(activeColor: const Color(0xFFEF4444), inactiveColor: inactiveColor, isActive: 0 < healthData.numActivePills),
+                                            const SizedBox(width: 5),
+                                            _buildHealthPill(activeColor: const Color(0xFFEF4444), inactiveColor: inactiveColor, isActive: 1 < healthData.numActivePills),
+                                            const SizedBox(width: 5),
+                                            _buildHealthPill(activeColor: const Color(0xFFF59E0B), inactiveColor: inactiveColor, isActive: 2 < healthData.numActivePills),
+                                            const SizedBox(width: 5),
+                                            _buildHealthPill(activeColor: const Color(0xFFF59E0B), inactiveColor: inactiveColor, isActive: 3 < healthData.numActivePills),
+                                            const SizedBox(width: 5),
+                                            _buildHealthPill(activeColor: const Color(0xFF007BFF), inactiveColor: inactiveColor, isActive: 4 < healthData.numActivePills),
+                                            const SizedBox(width: 5),
+                                            _buildHealthPill(activeColor: const Color(0xFF007BFF), inactiveColor: inactiveColor, isActive: 5 < healthData.numActivePills),
+                                            const SizedBox(width: 5),
+                                            _buildHealthPill(activeColor: const Color(0xFF10B981), inactiveColor: inactiveColor, isActive: 6 < healthData.numActivePills),
+                                            const SizedBox(width: 5),
+                                            _buildHealthPill(activeColor: const Color(0xFF10B981), inactiveColor: inactiveColor, isActive: 7 < healthData.numActivePills),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+
+                            const SizedBox(height: 8),
+
+                            // Scale Labels Row
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 12),
+                                  child: Text('Bad', style: TextStyle(fontSize: 11, color: context.textSecondary, fontWeight: FontWeight.w600)),
+                                ),
+                                Text('Warning', style: TextStyle(fontSize: 11, color: context.textSecondary, fontWeight: FontWeight.w600)),
+                                Text('Good', style: TextStyle(fontSize: 11, color: context.textSecondary, fontWeight: FontWeight.w600)),
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 12),
+                                  child: Text('Great', style: TextStyle(fontSize: 11, color: context.textSecondary, fontWeight: FontWeight.w600)),
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(height: 18),
+
+                            // "Give me advice" Orange CTA Button
+                            SizedBox(
+                              width: double.infinity,
+                              height: 48,
+                              child: ElevatedButton(
+                                onPressed: () => _showAdviceBottomSheet(invoices, currencyFormat),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFFFF5722),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                  elevation: 0,
+                                ),
+                                child: const Text(
+                                  'Give me advice',
+                                  style: TextStyle(
+                                    fontSize: 14.5,
+                                    fontWeight: FontWeight.w900,
+                                    color: Colors.white,
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 8),
-
-                    // Scale Labels Row
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: const [
-                        Padding(
-                          padding: EdgeInsets.only(left: 12),
-                          child: Text('Bad', style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8), fontWeight: FontWeight.w600)),
-                        ),
-                        Text('Warning', style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8), fontWeight: FontWeight.w600)),
-                        Text('Good', style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8), fontWeight: FontWeight.w600)),
-                        Padding(
-                          padding: EdgeInsets.only(right: 12),
-                          child: Text('Great', style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8), fontWeight: FontWeight.w600)),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 18),
-
-                    // "Give me advice" Orange CTA Button
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: ElevatedButton(
-                        onPressed: () => _showAdviceBottomSheet(invoices, currencyFormat),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFFF5722),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                          elevation: 0,
-                        ),
-                        child: const Text(
-                          'Give me advice',
-                          style: TextStyle(
-                            fontSize: 14.5,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.white,
-                          ),
+                          ],
                         ),
                       ),
                     ),
-                  ],
-                ),
-              ),
 
               const SizedBox(height: 22),
 
@@ -851,7 +1318,8 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
                                       ),
                                     ],
                                     const SizedBox(height: 3),
-                                    Row(
+                                    Wrap(
+                                      crossAxisAlignment: WrapCrossAlignment.center,
                                       children: [
                                         Text(
                                           currencyFormat.format(inv.total),
@@ -862,16 +1330,12 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
                                           ),
                                         ),
                                         const Text(' • ', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
-                                        Flexible(
-                                          child: Text(
-                                            'Until ${DateFormat('dd MMM yyyy').format(inv.dueDate)}',
-                                            style: const TextStyle(
-                                              fontSize: 11,
-                                              color: Color(0xFF64748B),
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
+                                        Text(
+                                          'Until ${DateFormat('dd MMM yyyy').format(inv.dueDate)}',
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            color: Color(0xFF64748B),
+                                            fontWeight: FontWeight.w500,
                                           ),
                                         ),
                                       ],
@@ -926,8 +1390,6 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
                                       ),
                                     );
                                     await PdfService.printInvoice(inv, profile);
-                                  } else if (action == 'duplicate') {
-                                    _handleDuplicateInvoice(inv);
                                   } else if (action == 'delete') {
                                     _handleDeleteInvoice(inv, displayInvNumber);
                                   }
@@ -974,16 +1436,6 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
                                     ),
                                   ),
                                   const PopupMenuItem(
-                                    value: 'duplicate',
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.copy_rounded, size: 16, color: Color(0xFFFF5722)),
-                                        SizedBox(width: 10),
-                                        Text('Duplicate', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
-                                      ],
-                                    ),
-                                  ),
-                                  const PopupMenuItem(
                                     value: 'delete',
                                     child: Row(
                                       children: [
@@ -1014,13 +1466,31 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
 );
 }
 
-  Widget _buildHealthPill(Color color) {
+  Widget _buildHealthPill({
+    required Color activeColor,
+    required Color inactiveColor,
+    required bool isActive,
+    bool isCurrentTip = false,
+  }) {
     return Expanded(
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
         height: 14,
         decoration: BoxDecoration(
-          color: color,
+          color: isActive ? activeColor : inactiveColor,
           borderRadius: BorderRadius.circular(7),
+          border: isCurrentTip
+              ? Border.all(color: Colors.white, width: 1.5)
+              : null,
+          boxShadow: isActive
+              ? [
+                  BoxShadow(
+                    color: activeColor.withValues(alpha: 0.25),
+                    blurRadius: 4,
+                    offset: const Offset(0, 1.5),
+                  ),
+                ]
+              : null,
         ),
       ),
     );
@@ -1053,61 +1523,6 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
         ),
       ),
     );
-  }
-
-  Future<void> _handleDuplicateInvoice(Invoice invoice) async {
-    HapticFeedback.lightImpact();
-    final shouldDuplicate = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Row(
-          children: [
-            Icon(Icons.content_copy_rounded, color: Color(0xFFFF5722), size: 22),
-            SizedBox(width: 10),
-            Text('Duplicate Invoice', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
-          ],
-        ),
-        content: Text(
-          'Create a duplicate copy of INV-#${invoice.invoiceNumber} for "${invoice.client.name}" with a fresh invoice number and today\'s date?',
-          style: const TextStyle(color: Color(0xFF64748B), fontSize: 14, height: 1.4),
-        ),
-        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFF5722),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-              elevation: 0,
-            ),
-            child: const Text('Duplicate', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-
-    if (shouldDuplicate == true && mounted) {
-      HapticFeedback.mediumImpact();
-      final duplicatedInvoice = await ref.read(invoiceProvider.notifier).duplicateAsNewInvoice(invoice);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Duplicated as INV-#${duplicatedInvoice.invoiceNumber}'),
-            backgroundColor: const Color(0xFF0F172A),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-        context.push('/preview', extra: duplicatedInvoice);
-      }
-    }
   }
 
   Future<bool> _handleDeleteInvoice(Invoice invoice, String displayInvNumber) async {
@@ -1413,4 +1828,26 @@ class _InvoicesHistoryScreenState extends ConsumerState<InvoicesHistoryScreen> {
       ),
     );
   }
+}
+
+class _TrianglePointerPainter extends CustomPainter {
+  final Color color;
+  const _TrianglePointerPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+    final path = Path()
+      ..moveTo(0, 0)
+      ..lineTo(size.width, 0)
+      ..lineTo(size.width / 2, size.height)
+      ..close();
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _TrianglePointerPainter oldDelegate) =>
+      oldDelegate.color != color;
 }

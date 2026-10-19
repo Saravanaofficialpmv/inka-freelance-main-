@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,6 +21,15 @@ class TibsySliverRefreshControl extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final bool isDesktopWeb = kIsWeb ||
+        defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.linux;
+
+    if (isDesktopWeb) {
+      return const SliverToBoxAdapter(child: SizedBox.shrink());
+    }
+
     return CupertinoSliverRefreshControl(
       refreshTriggerPullDistance: refreshTriggerPullDistance,
       refreshIndicatorExtent: refreshIndicatorExtent,
@@ -130,6 +140,22 @@ class TibsyPullToRefresh extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDesktopWeb = kIsWeb ||
+        defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.linux;
+
+    if (isDesktopWeb) {
+      return SingleChildScrollView(
+        controller: controller,
+        padding: padding,
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: ClampingScrollPhysics(),
+        ),
+        child: child,
+      );
+    }
+
     return CustomScrollView(
       controller: controller,
       physics: const BouncingScrollPhysics(

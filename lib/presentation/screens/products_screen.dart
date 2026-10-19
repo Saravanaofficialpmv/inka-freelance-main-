@@ -14,6 +14,7 @@ import '../../core/theme/theme_helper.dart';
 import '../../core/theme/app_motion.dart';
 import '../widgets/bouncing_button.dart';
 import '../widgets/animated_currency_text.dart';
+import '../../core/utils/navigation_utils.dart';
 
 class ProductsScreen extends ConsumerStatefulWidget {
   final bool isSelectionMode;
@@ -43,7 +44,7 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
     );
 
     final isWide = MediaQuery.sizeOf(context).width >= 900;
-    final showBackButton = widget.isSelectionMode || (context.canPop() && !isWide);
+    final showBackButton = !isWide || widget.isSelectionMode || context.canPop();
 
     return Scaffold(
       backgroundColor: context.scaffoldBg,
@@ -71,7 +72,9 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
                           children: [
                             if (showBackButton) ...[
                               GestureDetector(
-                                onTap: () => context.canPop() ? context.pop() : context.go('/dashboard'),
+                                key: const ValueKey('products_back_button'),
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () => safeNavigateBack(context, fallbackRoute: '/profile'),
                                 child: Container(
                                   width: 44,
                                   height: 44,

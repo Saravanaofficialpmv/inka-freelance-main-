@@ -1,17 +1,22 @@
 import 'package:firebase_auth/firebase_auth.dart' show User;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inka/data/models/business_profile.dart';
 import 'package:inka/data/models/client.dart';
 import 'package:inka/data/models/invoice.dart';
+import 'package:inka/data/models/product.dart';
 import 'package:inka/presentation/providers/profile_provider.dart';
 import 'package:inka/presentation/providers/auth_provider.dart';
 import 'package:inka/presentation/providers/client_provider.dart';
+import 'package:inka/presentation/providers/product_provider.dart';
 import 'package:inka/presentation/viewmodels/invoice_viewmodel.dart';
 import 'package:inka/presentation/widgets/web_sidebar.dart';
 import 'package:inka/presentation/widgets/nav_shell.dart';
+import 'package:inka/presentation/widgets/command_palette_dialog.dart';
+import 'package:inka/presentation/widgets/invite_members_dialog.dart';
 import 'package:inka/presentation/screens/dashboard_screen.dart';
 
 class FakeAuthNotifier extends StateNotifier<AsyncValue<User?>> implements AuthNotifier {
@@ -38,6 +43,13 @@ class FakeInvoiceNotifier extends StateNotifier<List<Invoice>> implements Invoic
 
 class FakeClientsNotifier extends StateNotifier<List<Client>> implements ClientsNotifier {
   FakeClientsNotifier([List<Client>? clients]) : super(clients ?? []);
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class FakeProductsNotifier extends StateNotifier<List<Product>> implements ProductsNotifier {
+  FakeProductsNotifier([List<Product>? products]) : super(products ?? []);
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -176,6 +188,74 @@ void main() {
 
       // "Jump back to recents" section
       expect(find.text('Jump back to recents'), findsOneWidget);
+    });
+
+    testWidgets('CommandPaletteDialog renders and responds to search', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1024, 768);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authProvider.overrideWith((ref) => FakeAuthNotifier()),
+            profileProvider.overrideWith((ref) => FakeProfileNotifier()),
+            invoiceProvider.overrideWith((ref) => FakeInvoiceNotifier([])),
+            clientsProvider.overrideWith((ref) => FakeClientsNotifier([])),
+            productsProvider.overrideWith((ref) => FakeProductsNotifier([])),
+          ],
+          child: const MaterialApp(
+            home: Scaffold(
+              body: CommandPaletteDialog(),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Create Invoice'), findsOneWidget);
+      expect(find.text('View Invoices'), findsOneWidget);
+      expect(find.text('Manage Clients'), findsOneWidget);
+      expect(find.text('Products & Services Catalog'), findsOneWidget);
+      expect(find.text('ESC'), findsOneWidget);
+
+      // Enter search text
+      await tester.enterText(find.byType(TextField), 'Clients');
+      await tester.pumpAndSettle();
+
+      expect(find.text('Manage Clients'), findsOneWidget);
+    });
+
+    testWidgets('InviteMembersDialog renders share link and send invite', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1024, 768);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (MethodCall methodCall) async {
+          return null;
+        },
+      );
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: InviteMembersDialog(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Invite Team Members'), findsOneWidget);
+      expect(find.text('WORKSPACE INVITE LINK'), findsOneWidget);
+      expect(find.text('Copy'), findsOneWidget);
+      expect(find.text('Send Invitation'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Copy'));
+      await tester.pump();
+      expect(find.text('Copied'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3));
     });
   });
 }

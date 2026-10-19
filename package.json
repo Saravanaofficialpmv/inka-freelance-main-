@@ -1,0 +1,10 @@
+{
+  "name": "inka-root",
+  "private": true,
+  "scripts": {
+    "build": "npm --prefix invoice-engine run build",
+    "type-check": "npm --prefix invoice-engine run type-check",
+    "dev": "npm --prefix invoice-engine run dev",
+    "preview": "npm --prefix invoice-engine run preview"
+  }
+}

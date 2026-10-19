@@ -189,24 +189,6 @@ class InvoiceNotifier extends StateNotifier<List<Invoice>> {
     ));
   }
 
-  /// Duplicates an existing invoice with a new generated invoice number, fresh issue date, and pending status.
-  Future<Invoice> duplicateAsNewInvoice(Invoice originalInvoice) async {
-    final newNumber = _generateNextInvoiceNumber();
-    final newInvoice = originalInvoice.copyWith(
-      id: 'inv_${DateTime.now().millisecondsSinceEpoch}',
-      invoiceNumber: newNumber,
-      issueDate: DateTime.now(),
-      dueDate: DateTime.now().add(const Duration(days: 14)),
-      status: 'pending',
-      nextRecurringDate: originalInvoice.isRecurring
-          ? calculateNextRecurringDate(DateTime.now(), originalInvoice.recurringInterval)
-          : null,
-    );
-
-    await addInvoice(newInvoice);
-    return newInvoice;
-  }
-
   /// Automatically generates next cycle invoices for recurring retainers whose renewal date has passed.
   Future<void> checkAndRenewRecurringInvoices() async {
     final now = DateTime.now();
@@ -252,9 +234,25 @@ class InvoiceNotifier extends StateNotifier<List<Invoice>> {
   }
 
   String _generateNextInvoiceNumber() {
-    final count = state.length + 1;
-    final year = DateTime.now().year;
-    return 'INV-$year-${count.toString().padLeft(3, '0')}';
+    if (state.isEmpty) return '1';
+    int maxSeq = 0;
+    for (final inv in state) {
+      final clean = inv.invoiceNumber.trim();
+      final direct = int.tryParse(clean);
+      if (direct != null && direct > 0 && direct < 100000) {
+        if (direct > maxSeq) maxSeq = direct;
+        continue;
+      }
+      final match = RegExp(r'(\d+)$').firstMatch(clean);
+      if (match != null) {
+        final val = int.tryParse(match.group(1)!);
+        if (val != null && val > 0 && val < 100000) {
+          if (val > maxSeq) maxSeq = val;
+        }
+      }
+    }
+    final nextNum = maxSeq > 0 ? (maxSeq + 1) : 1;
+    return '$nextNum';
   }
 
   Future<void> deleteInvoice(String id) async {

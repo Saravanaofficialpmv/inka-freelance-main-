@@ -10,18 +10,22 @@ import '../data/models/invoice.dart';
 import '../data/models/product.dart';
 import '../data/models/time_entry.dart';
 import '../data/models/project.dart';
+import '../features/invoices/templates/invoice_template_config.dart';
 
 final firestoreServiceProvider = Provider<FirestoreService>((ref) {
   return FirestoreService();
 });
 
 class FirestoreService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  FirebaseFirestore get _firestore => FirebaseFirestore.instance;
 
   String? get currentUserId => FirebaseAuth.instance.currentUser?.uid;
 
   DocumentReference<Map<String, dynamic>> _profileDoc(String userId) =>
       _firestore.collection('users').doc(userId).collection('profile').doc('business');
+
+  DocumentReference<Map<String, dynamic>> _templateConfigDoc(String userId) =>
+      _firestore.collection('users').doc(userId).collection('profile').doc('templateConfig');
 
   CollectionReference<Map<String, dynamic>> _clientsCollection(String userId) =>
       _firestore.collection('users').doc(userId).collection('clients');
@@ -76,6 +80,32 @@ class FirestoreService {
       }
       return null;
     });
+  }
+
+  // ==================== TEMPLATE CONFIG ====================
+
+  Future<void> saveTemplateConfig(InvoiceTemplateConfig config, {String? userId}) async {
+    final uid = userId ?? currentUserId;
+    if (uid == null) return;
+    try {
+      await _templateConfigDoc(uid).set(config.toMap(), SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('Firestore saveTemplateConfig error: $e');
+    }
+  }
+
+  Future<InvoiceTemplateConfig?> getTemplateConfig({String? userId}) async {
+    final uid = userId ?? currentUserId;
+    if (uid == null) return null;
+    try {
+      final doc = await _templateConfigDoc(uid).get();
+      if (doc.exists && doc.data() != null) {
+        return InvoiceTemplateConfig.fromMap(doc.data()!);
+      }
+    } catch (e) {
+      debugPrint('Firestore getTemplateConfig error: $e');
+    }
+    return null;
   }
 
   // ==================== CLIENTS ====================
@@ -353,6 +383,27 @@ class FirestoreService {
             await profileBox.put('current', remoteProfile);
           } else if (localProfile != null && localProfile.businessName.isNotEmpty) {
             await saveBusinessProfile(localProfile, userId: userId);
+          }
+        }(),
+
+        // 1b. Sync Template Configuration
+        () async {
+          try {
+            final templateBox = Hive.isBoxOpen('template_config')
+                ? Hive.box('template_config')
+                : await Hive.openBox('template_config');
+            final remoteConfig = await getTemplateConfig(userId: userId);
+            final localConfig = templateBox.get('current');
+            if (remoteConfig != null) {
+              await templateBox.put('current', remoteConfig.toMap());
+            } else if (localConfig != null && localConfig is Map) {
+              await saveTemplateConfig(
+                InvoiceTemplateConfig.fromMap(Map<String, dynamic>.from(localConfig)),
+                userId: userId,
+              );
+            }
+          } catch (e) {
+            debugPrint('Error syncing template config: $e');
           }
         }(),
 

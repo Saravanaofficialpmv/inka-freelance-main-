@@ -12,6 +12,9 @@ import '../../core/constants/colors.dart';
 import '../../core/theme/theme_helper.dart';
 import '../../data/models/business_profile.dart';
 import '../../services/currency_tax_service.dart';
+import '../providers/template_config_provider.dart';
+import '../../features/invoices/templates/invoice_template_registry.dart';
+import '../../core/localization/app_localizations.dart';
 
 enum _BadgeType { pro, advanced, beta, newItem }
 
@@ -26,6 +29,84 @@ class ProfileScreen extends ConsumerWidget {
     final businessProfile = ref.watch(profileProvider);
     final subscription = ref.watch(subscriptionProvider);
     final isWide = MediaQuery.sizeOf(context).width >= 900;
+
+    if (isWide) {
+      return Material(
+        color: const Color(0xFFF7F8FA),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 28),
+          physics: const AlwaysScrollableScrollPhysics(parent: ClampingScrollPhysics()),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 880),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      _buildHeaderAvatar(context, user, businessProfile, displayName),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              businessProfile.businessName.isNotEmpty
+                                  ? businessProfile.businessName
+                                  : displayName,
+                              style: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.textPrimary,
+                                letterSpacing: -0.4,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              user?.email ?? 'Free User Account',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: (subscription.isPro ? AppColors.primary : const Color(0xFF64748B)).withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: (subscription.isPro ? AppColors.primary : const Color(0xFF64748B)).withValues(alpha: 0.25),
+                          ),
+                        ),
+                        child: Text(
+                          subscription.isPro ? 'Pro Active' : 'Free Plan',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: subscription.isPro ? AppColors.primary : const Color(0xFF64748B),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  _buildProfileCards(context, ref, businessProfile, subscription, displayName),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: context.scaffoldBg,
@@ -78,300 +159,350 @@ class ProfileScreen extends ConsumerWidget {
             // ── Scrollable Body with Pull to Refresh ──
             Expanded(
               child: TibsyPullToRefresh(
-                padding: EdgeInsets.fromLTRB(20, 6, 20, isWide ? 32 : 120),
+                padding: const EdgeInsets.fromLTRB(20, 6, 20, 120),
                 onRefresh: () => syncAndRefreshEntireApp(ref),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // ── Profile Completed Card ──
-                    Builder(builder: (context) {
-                      int score = 20;
-                      if (businessProfile.businessName.isNotEmpty) score += 20;
-                      if (businessProfile.address.isNotEmpty) score += 20;
-                      if ((businessProfile.accountNo != null && businessProfile.accountNo!.isNotEmpty) ||
-                          (businessProfile.upiId != null && businessProfile.upiId!.isNotEmpty)) {
-                        score += 20;
-                      }
-                      if (businessProfile.signatureUrl != null && businessProfile.signatureUrl!.isNotEmpty) {
-                        score += 20;
-                      }
-                      if (score > 100) score = 100;
-
-                      final missingBank = (businessProfile.accountNo == null || businessProfile.accountNo!.isEmpty) &&
-                          (businessProfile.upiId == null || businessProfile.upiId!.isEmpty);
-                      final missingAddress = businessProfile.address.isEmpty;
-                      final missingSignature = businessProfile.signatureUrl == null || businessProfile.signatureUrl!.isEmpty;
-                      final missingCompany = businessProfile.businessName.isEmpty;
-
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: context.cardBg,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: context.cardBorder),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: context.isDarkMode ? 0.25 : 0.03),
-                              blurRadius: 10,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Profile Completed',
-                                        style: TextStyle(
-                                          fontSize: 15.5,
-                                          fontWeight: FontWeight.bold,
-                                          color: context.textPrimary,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 3),
-                                      Text(
-                                        score == 100
-                                            ? 'Great job! Your profile is 100% complete.'
-                                            : 'Complete your pending action(s) to reach 100%',
-                                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Text(
-                                  '$score%',
-                                  style: const TextStyle(
-                                    fontSize: 26,
-                                    fontWeight: FontWeight.w900,
-                                    color: AppColors.textPrimary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(4),
-                              child: LinearProgressIndicator(
-                                value: score / 100,
-                                backgroundColor: const Color(0xFFF1F5F9),
-                                valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
-                                minHeight: 6,
-                              ),
-                            ),
-                            if (score < 100) ...[
-                              const SizedBox(height: 12),
-                              SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                child: Row(
-                                  children: [
-                                    if (missingBank)
-                                      _ActionChip(
-                                        label: '+ Bank',
-                                        onTap: () => context.go('/bank-details'),
-                                      ),
-                                    if (missingAddress)
-                                      _ActionChip(
-                                        label: '+ Address',
-                                        onTap: () => context.go('/company-details'),
-                                      ),
-                                    if (missingSignature)
-                                      _ActionChip(
-                                        label: '+ Signature',
-                                        onTap: () => context.go('/signatures'),
-                                      ),
-                                    if (missingCompany)
-                                      _ActionChip(
-                                        label: '+ Company',
-                                        onTap: () => context.go('/company-details'),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      );
-                    }),
-
-                    // ── 1. Section: Profile & Company ──
-                    const _SectionHeader(title: 'Profile'),
-                    _SectionCard(
-                      children: [
-                        _SettingsTile(
-                          icon: Icons.business_outlined,
-                          title: 'Company Details',
-                          subtitle: businessProfile.businessName.isNotEmpty
-                              ? businessProfile.businessName
-                              : 'Set up company name, address & tax info',
-                          onTap: () => context.go('/company-details'),
-                        ),
-                        _SettingsTile(
-                          icon: Icons.account_balance_outlined,
-                          title: 'Bank & UPI Details',
-                          subtitle: (businessProfile.accountNo != null && businessProfile.accountNo!.isNotEmpty)
-                              ? 'A/C: ****${businessProfile.accountNo!.length >= 4 ? businessProfile.accountNo!.substring(businessProfile.accountNo!.length - 4) : businessProfile.accountNo}'
-                              : (businessProfile.upiId != null && businessProfile.upiId!.isNotEmpty)
-                                  ? 'UPI: ${businessProfile.upiId}'
-                                  : 'Add bank account and UPI QR code',
-                          onTap: () => context.go('/bank-details'),
-                        ),
-                        _SettingsTile(
-                          icon: Icons.draw_outlined,
-                          title: 'Signatures & Stamps',
-                          subtitle: (businessProfile.signatureUrl != null && businessProfile.signatureUrl!.isNotEmpty)
-                              ? 'Digital signature configured'
-                              : 'Draw or upload authorized signature',
-                          isLast: true,
-                          onTap: () => context.go('/signatures'),
-                        ),
-                      ],
-                    ),
-
-                    // ── 2. Section: Invoice Settings ──
-                    const _SectionHeader(title: 'Invoice Settings'),
-                    _SectionCard(
-                      children: [
-                        _SettingsTile(
-                          icon: Icons.tune_outlined,
-                          title: 'Document Settings',
-                          subtitle: 'Tax (${businessProfile.taxLabel.isNotEmpty ? businessProfile.taxLabel : "GST"} ${businessProfile.defaultTaxRate.toStringAsFixed(0)}%) & Currency (${businessProfile.currency})',
-                          onTap: () => context.go('/document-settings'),
-                        ),
-                        _SettingsTile(
-                          icon: Icons.dashboard_customize_outlined,
-                          title: 'Invoice Templates',
-                          subtitle: '14 professional layout designs',
-                          onTap: () => context.go('/templates'),
-                        ),
-                        _SettingsTile(
-                          icon: Icons.description_outlined,
-                          title: 'Notes & Terms',
-                          subtitle: 'Default payment terms and notes',
-                          onTap: () => context.go('/notes-terms'),
-                        ),
-                        _SettingsTile(
-                          icon: Icons.inventory_2_outlined,
-                          title: 'Product Catalog',
-                          subtitle: 'Manage items, inventory & pricing',
-                          isLast: true,
-                          onTap: () => context.go('/products'),
-                        ),
-                      ],
-                    ),
-
-                    // ── 3. Section: Preferences & Subscription ──
-                    const _SectionHeader(title: 'Preferences'),
-                    _SectionCard(
-                      children: [
-                        _SettingsTile(
-                          icon: Icons.monetization_on_outlined,
-                          title: 'Currency',
-                          subtitle: '${CurrencyTaxService.findCurrency(businessProfile.currency).name} (${CurrencyTaxService.findCurrency(businessProfile.currency).symbol})',
-                          onTap: () => context.go('/currency-settings'),
-                        ),
-                        _SettingsTile(
-                          icon: Icons.translate_rounded,
-                          title: 'Language',
-                          subtitle: 'English, Tamil, Hindi, Spanish',
-                          onTap: () => context.go('/language-settings'),
-                        ),
-                        _SettingsTile(
-                          icon: Icons.workspace_premium_outlined,
-                          title: 'Subscription Plans',
-                          subtitle: subscription.isPro ? 'Inka Pro Active' : 'Explore Pro & Subscription Plans',
-                          badge: subscription.isPro ? _BadgeType.pro : null,
-                          isLast: true,
-                          onTap: () => context.go('/subscription'),
-                        ),
-                      ],
-                    ),
-
-                    // ── 4. Section: Support & Legal ──
-                    const _SectionHeader(title: 'Support & Legal'),
-                    _SectionCard(
-                      children: [
-                        _SettingsTile(
-                          icon: Icons.support_agent_outlined,
-                          title: 'Help & Support',
-                          subtitle: 'Contact via WhatsApp & Email',
-                          onTap: () => context.go('/help-support'),
-                        ),
-                        _SettingsTile(
-                          icon: Icons.shield_outlined,
-                          title: 'Privacy Policy',
-                          subtitle: 'Data protection and security',
-                          onTap: () => context.go('/privacy-policy'),
-                        ),
-                        _SettingsTile(
-                          icon: Icons.logout_rounded,
-                          title: 'Logout',
-                          subtitle: 'Sign out of your account',
-                          onTap: () => _showLogoutConfirmDialog(context, ref),
-                        ),
-                        _SettingsTile(
-                          icon: Icons.delete_forever_outlined,
-                          iconColor: AppColors.error,
-                          titleColor: AppColors.error,
-                          title: 'Delete Account',
-                          subtitle: 'Permanently delete account and all data',
-                          isLast: true,
-                          onTap: () => _showDeleteAccountDialog(
-                            context,
-                            ref,
-                            businessProfile.businessName.trim().isNotEmpty
-                                ? businessProfile.businessName.trim()
-                                : displayName,
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    // ── 5. Footer Branding ──
-                    const SizedBox(height: 28),
-                    Center(
-                      child: Column(
-                        children: [
-                          const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                'inka',
-                                style: TextStyle(
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w900,
-                                  color: AppColors.textPrimary,
-                                  letterSpacing: -0.5,
-                                ),
-                              ),
-                              SizedBox(width: 6),
-                              Text('🇮🇳', style: TextStyle(fontSize: 16)),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          const Text(
-                            'App Version: 1.0.0',
-                            style: TextStyle(fontSize: 12.5, color: AppColors.textMuted, fontWeight: FontWeight.w500),
-                          ),
-                          const SizedBox(height: 20),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+                child: _buildProfileCards(context, ref, businessProfile, subscription, displayName),
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildProfileCards(
+    BuildContext context,
+    WidgetRef ref,
+    BusinessProfile businessProfile,
+    UserSubscriptionState subscription,
+    String displayName,
+  ) {
+    final templateConfig = ref.watch(templateConfigProvider);
+    final selectedTemplate = InvoiceTemplateRegistry.getTemplate(templateConfig.templateId);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Profile Completed Card ──
+        Builder(builder: (context) {
+          int score = 20;
+          if (businessProfile.businessName.isNotEmpty) score += 20;
+          if (businessProfile.address.isNotEmpty) score += 20;
+          if ((businessProfile.accountNo != null && businessProfile.accountNo!.isNotEmpty) ||
+              (businessProfile.upiId != null && businessProfile.upiId!.isNotEmpty)) {
+            score += 20;
+          }
+          if (businessProfile.signatureUrl != null && businessProfile.signatureUrl!.isNotEmpty) {
+            score += 20;
+          }
+          if (score > 100) score = 100;
+
+          final missingBank = (businessProfile.accountNo == null || businessProfile.accountNo!.isEmpty) &&
+              (businessProfile.upiId == null || businessProfile.upiId!.isEmpty);
+          final missingAddress = businessProfile.address.isEmpty;
+          final missingSignature = businessProfile.signatureUrl == null || businessProfile.signatureUrl!.isEmpty;
+          final missingCompany = businessProfile.businessName.isEmpty;
+
+          return Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: context.cardBg,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: context.cardBorder),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: context.isDarkMode ? 0.25 : 0.03),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Profile Completed',
+                            style: TextStyle(
+                              fontSize: 15.5,
+                              fontWeight: FontWeight.bold,
+                              color: context.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            score == 100
+                                ? 'Great job! Your profile is 100% complete.'
+                                : 'Complete your pending action(s) to reach 100%',
+                            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      '$score%',
+                      style: const TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: score / 100,
+                    backgroundColor: const Color(0xFFF1F5F9),
+                    valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
+                    minHeight: 6,
+                  ),
+                ),
+                if (score < 100) ...[
+                  const SizedBox(height: 12),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        if (missingBank)
+                          _ActionChip(
+                            label: '+ Bank',
+                            onTap: () => context.go('/bank-details'),
+                          ),
+                        if (missingAddress)
+                          _ActionChip(
+                            label: '+ Address',
+                            onTap: () => context.go('/company-details'),
+                          ),
+                        if (missingSignature)
+                          _ActionChip(
+                            label: '+ Signature',
+                            onTap: () => context.go('/signatures'),
+                          ),
+                        if (missingCompany)
+                          _ActionChip(
+                            label: '+ Company',
+                            onTap: () => context.go('/company-details'),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          );
+        }),
+
+        // ── 1. Section: Profile & Company ──
+        const _SectionHeader(title: 'Profile'),
+        _SectionCard(
+          children: [
+            _SettingsTile(
+              icon: Icons.business_outlined,
+              title: 'Company Details',
+              subtitle: businessProfile.businessName.isNotEmpty
+                  ? businessProfile.businessName
+                  : 'Set up company name, address & tax info',
+              onTap: () => context.go('/company-details'),
+            ),
+            _SettingsTile(
+              icon: Icons.account_balance_outlined,
+              title: 'Bank & UPI Details',
+              subtitle: (businessProfile.accountNo != null && businessProfile.accountNo!.isNotEmpty)
+                  ? 'A/C: ****${businessProfile.accountNo!.length >= 4 ? businessProfile.accountNo!.substring(businessProfile.accountNo!.length - 4) : businessProfile.accountNo}'
+                  : (businessProfile.upiId != null && businessProfile.upiId!.isNotEmpty)
+                      ? 'UPI: ${businessProfile.upiId}'
+                      : 'Add bank account and UPI QR code',
+              onTap: () => context.go('/bank-details'),
+            ),
+            _SettingsTile(
+              icon: Icons.draw_outlined,
+              title: 'Signatures & Stamps',
+              subtitle: (businessProfile.signatureUrl != null && businessProfile.signatureUrl!.isNotEmpty)
+                  ? 'Digital signature configured'
+                  : 'Draw or upload authorized signature',
+              isLast: true,
+              onTap: () => context.go('/signatures'),
+            ),
+          ],
+        ),
+
+        // ── 2. Section: Invoice Settings ──
+        const _SectionHeader(title: 'Invoice Settings'),
+        _SectionCard(
+          children: [
+            _SettingsTile(
+              icon: Icons.tune_outlined,
+              title: 'Document Settings',
+              subtitle: 'Tax (${businessProfile.taxLabel.isNotEmpty ? businessProfile.taxLabel : "GST"} ${businessProfile.defaultTaxRate.toStringAsFixed(0)}%) & Currency (${businessProfile.currency.isNotEmpty ? businessProfile.currency : "USD"})',
+              onTap: () => context.go('/document-settings'),
+            ),
+            _SettingsTile(
+              icon: Icons.palette_outlined,
+              title: 'Invoice Templates',
+              subtitle: '${AppLocalizations.of(context)?.translate('invoice_appearance_desc') ?? "Customize how your invoices look"} • ${selectedTemplate.name}',
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 24,
+                    height: 32,
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: const Color(0xFFCBD5E1), width: 0.8),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: Image.asset(
+                      selectedTemplate.assetPreview,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
+                    ),
+                    child: Text(
+                      AppLocalizations.of(context)?.translate('change_template') ?? 'Change',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(Icons.chevron_right, color: context.textMuted, size: 20),
+                ],
+              ),
+              onTap: () => context.go('/templates'),
+            ),
+            _SettingsTile(
+              icon: Icons.description_outlined,
+              title: 'Notes & Terms',
+              subtitle: 'Default payment terms and notes',
+              onTap: () => context.go('/notes-terms'),
+            ),
+            _SettingsTile(
+              icon: Icons.inventory_2_outlined,
+              title: 'Product Catalog',
+              subtitle: 'Manage items, inventory & pricing',
+              isLast: true,
+              onTap: () => context.go('/products'),
+            ),
+          ],
+        ),
+
+        // ── 3. Section: Preferences & Subscription ──
+        const _SectionHeader(title: 'Preferences'),
+        _SectionCard(
+          children: [
+            _SettingsTile(
+              icon: Icons.monetization_on_outlined,
+              title: 'Currency',
+              subtitle: '${CurrencyTaxService.findCurrency(businessProfile.currency).name} (${CurrencyTaxService.findCurrency(businessProfile.currency).symbol})',
+              onTap: () => context.go('/currency-settings'),
+            ),
+            _SettingsTile(
+              icon: Icons.translate_rounded,
+              title: 'Language',
+              subtitle: 'English, Tamil, Hindi, Spanish',
+              onTap: () => context.go('/language-settings'),
+            ),
+            _SettingsTile(
+              icon: Icons.workspace_premium_outlined,
+              title: 'Subscription Plans',
+              subtitle: subscription.isPro ? 'Inka Pro Active' : 'Explore Pro & Subscription Plans',
+              badge: subscription.isPro ? _BadgeType.pro : null,
+              isLast: true,
+              onTap: () => context.go('/subscription'),
+            ),
+          ],
+        ),
+
+        // ── 4. Section: Support & Legal ──
+        const _SectionHeader(title: 'Support & Legal'),
+        _SectionCard(
+          children: [
+            _SettingsTile(
+              icon: Icons.support_agent_outlined,
+              title: 'Help & Support',
+              subtitle: 'Contact via WhatsApp & Email',
+              onTap: () => context.go('/help-support'),
+            ),
+            _SettingsTile(
+              icon: Icons.shield_outlined,
+              title: 'Privacy Policy',
+              subtitle: 'Data protection and security',
+              onTap: () => context.go('/privacy-policy'),
+            ),
+            _SettingsTile(
+              icon: Icons.logout_rounded,
+              title: 'Logout',
+              subtitle: 'Sign out of your account',
+              onTap: () => _showLogoutConfirmDialog(context, ref),
+            ),
+            _SettingsTile(
+              icon: Icons.delete_forever_outlined,
+              iconColor: AppColors.error,
+              titleColor: AppColors.error,
+              title: 'Delete Account',
+              subtitle: 'Permanently delete account and all data',
+              isLast: true,
+              onTap: () => _showDeleteAccountDialog(
+                context,
+                ref,
+                businessProfile.businessName.trim().isNotEmpty
+                    ? businessProfile.businessName.trim()
+                    : displayName,
+              ),
+            ),
+          ],
+        ),
+
+        // ── 5. Footer Branding ──
+        const SizedBox(height: 28),
+        Center(
+          child: Column(
+            children: [
+              const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'inka',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.textPrimary,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  SizedBox(width: 6),
+                  Text('🇮🇳', style: TextStyle(fontSize: 16)),
+                ],
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'App Version: 1.0.0',
+                style: TextStyle(fontSize: 12.5, color: AppColors.textMuted, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -787,6 +918,7 @@ class _SettingsTile extends StatelessWidget {
   final VoidCallback? onTap;
   final Color? iconColor;
   final Color? titleColor;
+  final Widget? trailing;
 
   const _SettingsTile({
     this.icon,
@@ -797,6 +929,7 @@ class _SettingsTile extends StatelessWidget {
     this.onTap,
     this.iconColor,
     this.titleColor,
+    this.trailing,
   });
 
   @override
@@ -841,7 +974,7 @@ class _SettingsTile extends StatelessWidget {
                   ),
                 )
               : null,
-          trailing: Icon(Icons.chevron_right, color: context.textMuted, size: 20),
+          trailing: trailing ?? Icon(Icons.chevron_right, color: context.textMuted, size: 20),
         ),
       ),
         if (!isLast) Divider(height: 1, indent: 58, endIndent: 16, color: context.cardBorder),

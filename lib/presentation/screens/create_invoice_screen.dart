@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -110,8 +109,95 @@ class _CreateInvoiceScreenState extends ConsumerState<CreateInvoiceScreen> {
       _notes = invoice.notes;
       _milestones = List.from(invoice.milestones);
     } else {
-      _invoiceNumber = '${100000 + Random().nextInt(899999)}';
+      final existingInvoices = ref.read(invoiceProvider);
+      _invoiceNumber = _computeNextInvoiceNumber(existingInvoices);
     }
+  }
+
+  static String _computeNextInvoiceNumber(List<Invoice> existingInvoices) {
+    if (existingInvoices.isEmpty) {
+      return '1';
+    }
+
+    int maxSeq = 0;
+    for (final inv in existingInvoices) {
+      final clean = inv.invoiceNumber.trim();
+      final direct = int.tryParse(clean);
+      if (direct != null && direct > 0 && direct < 100000) {
+        if (direct > maxSeq) maxSeq = direct;
+        continue;
+      }
+      final match = RegExp(r'(\d+)$').firstMatch(clean);
+      if (match != null) {
+        final val = int.tryParse(match.group(1)!);
+        if (val != null && val > 0 && val < 100000) {
+          if (val > maxSeq) maxSeq = val;
+        }
+      }
+    }
+
+    if (maxSeq > 0) {
+      return '${maxSeq + 1}';
+    }
+
+    return '1';
+  }
+
+  void _showEditInvoiceNumberDialog() {
+    final controller = TextEditingController(text: _invoiceNumber);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Invoice Number', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Customize your invoice / bill number:',
+              style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              keyboardType: TextInputType.text,
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+              decoration: InputDecoration(
+                prefixText: 'INV-#',
+                prefixStyle: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0F172A), fontSize: 16),
+                hintText: '1',
+                filled: true,
+                fillColor: const Color(0xFFF8FAFC),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFFF5722), width: 1.5)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final newNum = controller.text.trim();
+              if (newNum.isNotEmpty) {
+                setState(() => _invoiceNumber = newNum);
+              }
+              Navigator.pop(ctx);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF5722),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -595,10 +681,32 @@ class _CreateInvoiceScreenState extends ConsumerState<CreateInvoiceScreen> {
                             letterSpacing: -0.4,
                           ),
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'INV-#$_invoiceNumber • Fill details below',
-                          style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+                        const SizedBox(height: 4),
+                        GestureDetector(
+                          onTap: _showEditInvoiceNumberDialog,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'INV-#$_invoiceNumber',
+                                  style: const TextStyle(
+                                    fontSize: 12.5,
+                                    color: Color(0xFF0F172A),
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                const Icon(Icons.edit_outlined, size: 12, color: Color(0xFF64748B)),
+                              ],
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -639,7 +747,14 @@ class _CreateInvoiceScreenState extends ConsumerState<CreateInvoiceScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Client / Recipient', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+                      const Expanded(
+                        child: Text(
+                          'Client / Recipient',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
                       GestureDetector(
                         onTap: () async {
                           final contact = await DeviceContactPickerSheet.show(context);
@@ -871,10 +986,14 @@ class _CreateInvoiceScreenState extends ConsumerState<CreateInvoiceScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        'Items & Services (${_items.length})',
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+                      Expanded(
+                        child: Text(
+                          'Items & Services (${_items.length})',
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
+                      const SizedBox(width: 8),
                       GestureDetector(
                         onTap: _showAddProductDialog,
                         child: const Text(
@@ -1105,22 +1224,27 @@ class _CreateInvoiceScreenState extends ConsumerState<CreateInvoiceScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(5),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFF5722).withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(8),
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFF5722).withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(Icons.splitscreen_rounded, size: 14, color: Color(0xFFFF5722)),
                             ),
-                            child: const Icon(Icons.splitscreen_rounded, size: 14, color: Color(0xFFFF5722)),
-                          ),
-                          const SizedBox(width: 8),
-                          const Text(
-                            'Payment Milestones & Tranches',
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
-                          ),
-                        ],
+                            const SizedBox(width: 8),
+                            const Expanded(
+                              child: Text(
+                                'Payment Milestones & Tranches',
+                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                       if (_milestones.isNotEmpty)
                         GestureDetector(

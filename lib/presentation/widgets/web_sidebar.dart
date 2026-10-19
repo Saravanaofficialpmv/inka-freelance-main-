@@ -8,6 +8,7 @@ import '../providers/profile_provider.dart';
 import '../providers/subscription_provider.dart';
 import '../screens/create_invoice_screen.dart';
 import 'inka_brand_logo.dart';
+import 'command_palette_dialog.dart';
 
 class WebSidebar extends ConsumerWidget {
   final String currentLocation;
@@ -143,37 +144,59 @@ class WebSidebar extends ConsumerWidget {
             ),
           ),
 
-          // ── 3. Search Box with Quick Add ──
+          // ── 3. Search Box with Quick Add & Keyboard Badge ──
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
             child: Row(
               children: [
                 Expanded(
-                  child: Container(
-                    height: 34,
-                    padding: const EdgeInsets.symmetric(horizontal: 9),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
-                    ),
-                    child: Row(
-                      children: const [
-                        Icon(Icons.search_rounded, size: 15, color: Color(0xFF94A3B8)),
-                        SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            'Search by title or to...',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Color(0xFF94A3B8),
-                              fontWeight: FontWeight.w500,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: GestureDetector(
+                      onTap: () => CommandPaletteDialog.show(context),
+                      child: Container(
+                        height: 34,
+                        padding: const EdgeInsets.symmetric(horizontal: 9),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
                         ),
-                      ],
+                        child: Row(
+                          children: [
+                            const Icon(Icons.search_rounded, size: 15, color: Color(0xFF94A3B8)),
+                            const SizedBox(width: 6),
+                            const Expanded(
+                              child: Text(
+                                'Search or jump to...',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF94A3B8),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: const Color(0xFFCBD5E1), width: 0.8),
+                              ),
+                              child: const Text(
+                                '⌘K',
+                                style: TextStyle(
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF64748B),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -296,7 +319,7 @@ class WebSidebar extends ConsumerWidget {
                     isActive: currentLocation.startsWith('/clients-tab') ||
                         currentLocation.startsWith('/clients') ||
                         currentLocation.startsWith('/client-details'),
-                    onTap: () => context.go('/clients-tab'),
+                    onTap: () => context.go('/clients'),
                   ),
                   _AppSidebarItem(
                     icon: Icons.inventory_2_outlined,

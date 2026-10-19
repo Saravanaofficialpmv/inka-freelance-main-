@@ -1,23 +1,21 @@
+import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import '../widgets/draw_signature_sheet.dart';
 import '../../data/models/invoice.dart';
 import '../providers/profile_provider.dart';
+import '../providers/template_config_provider.dart';
 import '../viewmodels/invoice_viewmodel.dart';
 import '../../services/currency_tax_service.dart';
 import '../../services/pdf_service.dart';
-import 'package:printing/printing.dart';
 import '../widgets/share_invoice_bottom_sheet.dart';
 import '../widgets/payment_qr_sheet.dart';
-import '../widgets/draw_signature_sheet.dart';
-import '../widgets/status_badge.dart';
-import '../widgets/pdf_shimmer_skeleton.dart';
 import '../widgets/bouncing_button.dart';
 import '../widgets/animated_currency_text.dart';
-import '../../core/theme/app_motion.dart';
 import '../widgets/celebration_sparkle.dart';
 import '../../services/interactive_invoice_service.dart';
 import '../widgets/milestone_config_sheet.dart';
@@ -35,8 +33,6 @@ class InvoicePreviewScreen extends ConsumerStatefulWidget {
 
 class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
   int _activeItemIndex = 0;
-  int _selectedViewTab = 0; // 0: Summary, 1: PDF Document
-  String? _selectedTemplateId;
   late PageController _pageController;
 
   @override
@@ -51,28 +47,6 @@ class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
     super.dispose();
   }
 
-  void _handleSetDefaultTemplate(String templateId) {
-    HapticFeedback.mediumImpact();
-    final profile = ref.read(profileProvider);
-    final updatedProfile = profile.copyWith(invoiceTemplate: templateId);
-    ref.read(profileProvider.notifier).updateProfile(updatedProfile);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 18),
-            const SizedBox(width: 8),
-            Text('Saved as default template!'),
-          ],
-        ),
-        backgroundColor: const Color(0xFF0F172A),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final liveInvoices = ref.watch(invoiceProvider);
@@ -82,7 +56,8 @@ class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
     );
 
     final profile = ref.watch(profileProvider);
-    final activeTemplateId = _selectedTemplateId ?? (profile.invoiceTemplate.isNotEmpty ? profile.invoiceTemplate : 'modern');
+    final templateConfig = ref.watch(templateConfigProvider);
+    final activeTemplateId = templateConfig.templateId;
 
     final currencyFormat = CurrencyTaxService.getCurrencyFormatter(
       currencyCode: profile.currency.isNotEmpty ? profile.currency : 'USD',
@@ -100,6 +75,7 @@ class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FA),
       body: SafeArea(
+        bottom: false,
         child: Column(
           children: [
             // ── Top Header Bar ──
@@ -138,447 +114,88 @@ class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
                       letterSpacing: -0.3,
                     ),
                   ),
-                  Row(
-                    children: [
-                      BouncingButton(
-                        scaleFactor: 0.90,
-                        onTap: () => _handleDuplicateInvoice(currentInvoice),
-                        child: Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
-                          ),
-                          child: const Icon(Icons.copy_rounded, size: 18, color: Color(0xFF0F172A)),
-                        ),
+                  BouncingButton(
+                    scaleFactor: 0.90,
+                    onTap: () {
+                      PaymentQrSheet.show(
+                        context,
+                        profile: profile,
+                        invoice: currentInvoice,
+                      );
+                    },
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
                       ),
-                      const SizedBox(width: 8),
-                      BouncingButton(
-                        scaleFactor: 0.90,
-                        onTap: () async {
-                          final applied = await DrawSignatureBottomSheet.show(context);
-                          if (applied == true && mounted) {
-                            setState(() {});
-                          }
-                        },
-                        child: Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: (profile.signatureUrl != null && profile.signatureUrl!.isNotEmpty)
-                                ? const Color(0xFFFFECE8)
-                                : Colors.white,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: (profile.signatureUrl != null && profile.signatureUrl!.isNotEmpty)
-                                  ? const Color(0xFFFF5722)
-                                  : const Color(0xFFE2E8F0),
-                              width: 1.2,
-                            ),
-                          ),
-                          child: Icon(
-                            Icons.draw_rounded,
-                            size: 19,
-                            color: (profile.signatureUrl != null && profile.signatureUrl!.isNotEmpty)
-                                ? const Color(0xFFFF5722)
-                                : const Color(0xFF0F172A),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      BouncingButton(
-                        scaleFactor: 0.90,
-                        onTap: () {
-                          PaymentQrSheet.show(
-                            context,
-                            profile: profile,
-                            invoice: currentInvoice,
-                          );
-                        },
-                        child: Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
-                          ),
-                          child: const Icon(Icons.qr_code_2_rounded, size: 20, color: Color(0xFF0F172A)),
-                        ),
-                      ),
-                    ],
+                      child: const Icon(Icons.qr_code_2_rounded, size: 20, color: Color(0xFF0F172A)),
+                    ),
                   ),
                 ],
               ),
             ),
 
-            // ── Segmented View Switcher (Summary vs PDF Preview) ──
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 6.0),
-              child: Container(
-                height: 40,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE2E8F0).withValues(alpha: 0.6),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                padding: const EdgeInsets.all(3),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () {
-                          HapticFeedback.selectionClick();
-                          setState(() => _selectedViewTab = 0);
-                        },
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 180),
-                          decoration: BoxDecoration(
-                            color: _selectedViewTab == 0 ? Colors.white : Colors.transparent,
-                            borderRadius: BorderRadius.circular(17),
-                            boxShadow: _selectedViewTab == 0
-                                ? [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.04),
-                                      blurRadius: 4,
-                                      offset: const Offset(0, 1),
-                                    ),
-                                  ]
-                                : null,
-                          ),
-                          child: Center(
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.dashboard_outlined,
-                                  size: 15,
-                                  color: _selectedViewTab == 0 ? const Color(0xFF0F172A) : const Color(0xFF64748B),
-                                ),
-                                const SizedBox(width: 5),
-                                Text(
-                                  'Summary',
-                                  style: TextStyle(
-                                    fontSize: 12.5,
-                                    fontWeight: _selectedViewTab == 0 ? FontWeight.w800 : FontWeight.w600,
-                                    color: _selectedViewTab == 0 ? const Color(0xFF0F172A) : const Color(0xFF64748B),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () {
-                          HapticFeedback.selectionClick();
-                          setState(() => _selectedViewTab = 1);
-                        },
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 180),
-                          decoration: BoxDecoration(
-                            color: _selectedViewTab == 1 ? Colors.white : Colors.transparent,
-                            borderRadius: BorderRadius.circular(17),
-                            boxShadow: _selectedViewTab == 1
-                                ? [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.04),
-                                      blurRadius: 4,
-                                      offset: const Offset(0, 1),
-                                    ),
-                                  ]
-                                : null,
-                          ),
-                          child: Center(
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.picture_as_pdf_outlined,
-                                  size: 15,
-                                  color: _selectedViewTab == 1 ? const Color(0xFFFF5722) : const Color(0xFF64748B),
-                                ),
-                                const SizedBox(width: 5),
-                                Text(
-                                  'PDF Preview',
-                                  style: TextStyle(
-                                    fontSize: 12.5,
-                                    fontWeight: _selectedViewTab == 1 ? FontWeight.w800 : FontWeight.w600,
-                                    color: _selectedViewTab == 1 ? const Color(0xFFFF5722) : const Color(0xFF64748B),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
             Expanded(
-              child: AnimatedSwitcher(
-                duration: AppMotion.navigation,
-                switchInCurve: AppMotion.entrance,
-                switchOutCurve: AppMotion.stateChange,
-                transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
-                child: _selectedViewTab == 1
-                    ? Column(
-                        key: const ValueKey('view_tab_pdf'),
-                        children: [
-                    // Template Selector Bar
-                    Container(
-                      padding: const EdgeInsets.symmetric(vertical: 6),
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        physics: const BouncingScrollPhysics(),
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: Row(
-                          children: [
-                            ...PdfService.availableTemplates.map((template) {
-                              final isSelected = activeTemplateId == template.id;
-                              final color = Color(int.parse(template.primaryColorHex.replaceFirst('#', '0xFF')));
-
-                              return GestureDetector(
-                                onTap: () {
-                                  HapticFeedback.selectionClick();
-                                  setState(() => _selectedTemplateId = template.id);
-                                },
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 180),
-                                  margin: const EdgeInsets.only(right: 8),
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                                  decoration: BoxDecoration(
-                                    color: isSelected ? Colors.white : const Color(0xFFF1F5F9),
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(
-                                      color: isSelected ? color : const Color(0xFFE2E8F0),
-                                      width: isSelected ? 1.6 : 1.0,
-                                    ),
-                                    boxShadow: isSelected
-                                        ? [
-                                            BoxShadow(
-                                              color: color.withValues(alpha: 0.15),
-                                              blurRadius: 8,
-                                              offset: const Offset(0, 2),
-                                            ),
-                                          ]
-                                        : null,
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(template.icon, style: const TextStyle(fontSize: 13)),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        template.name,
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                                          color: isSelected ? color : const Color(0xFF64748B),
-                                        ),
-                                      ),
-                                      if (profile.invoiceTemplate == template.id) ...[
-                                        const SizedBox(width: 4),
-                                        Container(
-                                          width: 5,
-                                          height: 5,
-                                          decoration: BoxDecoration(
-                                            color: color,
-                                            shape: BoxShape.circle,
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                              );
-                            }),
-                            if (profile.invoiceTemplate != activeTemplateId)
-                              GestureDetector(
-                                onTap: () => _handleSetDefaultTemplate(activeTemplateId),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(color: const Color(0xFFCBD5E1)),
-                                  ),
-                                  child: const Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.star_rounded, size: 14, color: Color(0xFFF59E0B)),
-                                      SizedBox(width: 4),
-                                      Text(
-                                        'Set Default',
-                                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            GestureDetector(
-                              onTap: () async {
-                                final result = await context.push('/templates');
-                                if (result is String) {
-                                  setState(() => _selectedTemplateId = result);
-                                }
-                              },
-                              child: Container(
-                                margin: const EdgeInsets.only(left: 4),
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF0F172A),
-                                  borderRadius: BorderRadius.circular(16),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.1),
-                                      blurRadius: 6,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ],
-                                ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.view_carousel_rounded, size: 14, color: Colors.white),
-                                    SizedBox(width: 5),
-                                    Text(
-                                      'Studio',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w800,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ── 1. Invoice ID ──
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            currentInvoice.invoiceNumber.startsWith('INV-')
+                                ? currentInvoice.invoiceNumber
+                                : (currentInvoice.invoiceNumber.startsWith('#')
+                                    ? 'INV-${currentInvoice.invoiceNumber}'
+                                    : 'INV-#${currentInvoice.invoiceNumber}'),
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF0F172A),
+                              letterSpacing: -0.6,
                             ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    // PDF Preview Viewer with Key
-                    Expanded(
-                      child: PdfPreview(
-                        key: ValueKey('pdf_${activeTemplateId}_${profile.signatureUrl ?? ""}'),
-                        build: (format) => PdfService.generateInvoicePdf(
-                          currentInvoice,
-                          profile,
-                          templateId: activeTemplateId,
-                        ),
-                        allowPrinting: false,
-                        allowSharing: false,
-                        canChangeOrientation: false,
-                        canChangePageFormat: false,
-                        canDebug: false,
-                        scrollViewDecoration: const BoxDecoration(color: Colors.transparent),
-                        pdfFileName: 'Invoice-${currentInvoice.invoiceNumber}.pdf',
-                        loadingWidget: const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                          child: SingleChildScrollView(
-                            physics: NeverScrollableScrollPhysics(),
-                            child: PdfShimmerSkeleton(),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                      ),
-                    ),
-                        ],
-                      )
-                    : SingleChildScrollView(
-                        key: const ValueKey('view_tab_summary'),
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // ── Invoice ID & Status Pill ──
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              currentInvoice.invoiceNumber.startsWith('INV-')
-                                  ? currentInvoice.invoiceNumber
-                                  : (currentInvoice.invoiceNumber.startsWith('#')
-                                      ? 'INV-${currentInvoice.invoiceNumber}'
-                                      : 'INV-#${currentInvoice.invoiceNumber}'),
-                              style: const TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.w900,
-                                color: Color(0xFF0F172A),
-                                letterSpacing: -0.6,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                        if (currentInvoice.isPaid)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.check_circle_rounded, size: 14, color: Color(0xFF10B981)),
+                                SizedBox(width: 4),
+                                Text(
+                                  'PAID',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF047857),
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          StatusBadge(
-                            status: currentInvoice.status,
-                            dueDate: currentInvoice.dueDate,
-                            fontSize: 13,
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                            onTap: () {
-                              final willBePaid = !currentInvoice.isPaid;
-                              ref.read(invoiceProvider.notifier).togglePaymentStatus(currentInvoice.id);
-                              if (willBePaid) {
-                                CelebrationSparkle.show(
-                                  context,
-                                  message: 'Invoice #${currentInvoice.invoiceNumber} Paid! 🎉',
-                                );
-                              } else {
-                                HapticFeedback.mediumImpact();
-                              }
-                            },
-                          ),
-                        ],
-                      ),
-
-                      if (!currentInvoice.isPaid) ...[
-                        const SizedBox(height: 14),
-                        SlideToConfirm(
-                          label: 'Slide to mark as Paid',
-                          completedLabel: 'Paid in Full 🎉',
-                          progressColor: const Color(0xFF10B981),
-                          icon: Icons.check_circle_rounded,
-                          onConfirmed: () async {
-                            await ref.read(invoiceProvider.notifier).togglePaymentStatus(currentInvoice.id);
-                            if (context.mounted) {
-                              CelebrationSparkle.show(
-                                context,
-                                message: 'Invoice #${currentInvoice.invoiceNumber} Paid! 🎉',
-                              );
-                            }
-                          },
-                        ),
                       ],
+                    ),
 
-                      const SizedBox(height: 14),
-
-                      // ── Interactive Web Link & Read Status Card ──
-                      _buildInteractiveLinkCard(context, currentInvoice),
-
-                      // ── Payment Proof Banner (if submitted) ──
-                      if (currentInvoice.hasPaymentProof) ...[
-                        const SizedBox(height: 12),
-                        _buildPaymentProofBanner(context, currentInvoice),
-                      ],
-
-                      const SizedBox(height: 12),
-
-                      // ── Payment Milestones & Deposit Tranches ──
-                      _buildMilestonesSection(context, currentInvoice, profile, currencyFormat),
-
-                      const SizedBox(height: 16),
+                    const SizedBox(height: 18),
 
                     // ── Issued on & Due on Row ──
                     Row(
@@ -838,106 +455,170 @@ class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // ── Signatory & Digital Signature Card ──
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Row(
-                                children: [
-                                  Icon(Icons.draw_rounded, size: 18, color: Color(0xFFFF5722)),
-                                  SizedBox(width: 8),
-                                  Text(
-                                    'Authorized Signatory',
-                                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
-                                  ),
-                                ],
-                              ),
-                              TextButton(
-                                style: TextButton.styleFrom(
-                                  foregroundColor: const Color(0xFFFF5722),
-                                  padding: EdgeInsets.zero,
-                                  minimumSize: Size.zero,
-                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                ),
-                                onPressed: () async {
-                                  final res = await DrawSignatureBottomSheet.show(context);
-                                  if (res == true && mounted) setState(() {});
-                                },
-                                child: Text(
-                                  (profile.signatureUrl != null && profile.signatureUrl!.isNotEmpty)
-                                      ? 'Redraw'
-                                      : 'Draw Signature',
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          if (profile.signatureUrl != null && profile.signatureUrl!.isNotEmpty) ...[
-                            Container(
-                              height: 50,
-                              alignment: Alignment.centerLeft,
-                              child: Image.file(File(profile.signatureUrl!), fit: BoxFit.contain),
-                            ),
-                            const SizedBox(height: 4),
-                            const Text(
-                              'Signature attached • Appears on PDF bill',
-                              style: TextStyle(fontSize: 11.5, color: Color(0xFF10B981), fontWeight: FontWeight.w600),
-                            ),
-                          ] else ...[
-                            InkWell(
-                              onTap: () async {
-                                final res = await DrawSignatureBottomSheet.show(context);
-                                if (res == true && mounted) setState(() {});
-                              },
-                              borderRadius: BorderRadius.circular(12),
-                              child: Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFF8FAFC),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: const Color(0xFFCBD5E1), style: BorderStyle.solid),
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: const [
-                                    Icon(Icons.draw_outlined, size: 18, color: Color(0xFFFF5722)),
+                    // ── Authorized Signatory (Applied from Profile) ──
+                    if (profile.signatureUrl != null && profile.signatureUrl!.isNotEmpty)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Row(
+                                  children: [
+                                    Icon(Icons.verified_rounded, size: 18, color: Color(0xFF10B981)),
                                     SizedBox(width: 8),
                                     Text(
-                                      'Tap here to draw signature on this bill',
-                                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFFFF5722)),
+                                      'Authorized Signatory',
+                                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
                                     ),
                                   ],
                                 ),
-                              ),
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: const Text(
+                                        'Profile Signature',
+                                        style: TextStyle(color: Color(0xFF10B981), fontSize: 11, fontWeight: FontWeight.w700),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    InkWell(
+                                      onTap: () async {
+                                        await DrawSignatureBottomSheet.show(context);
+                                      },
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFFF5722).withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: const Text(
+                                          'Change',
+                                          style: TextStyle(color: Color(0xFFFF5722), fontSize: 11, fontWeight: FontWeight.w700),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            Container(
+                              height: 48,
+                              alignment: Alignment.centerLeft,
+                              child: _buildSignatureImage(context, profile.signatureUrl!),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Signed by $senderName • Applied automatically from Profile',
+                              style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
                             ),
                           ],
-                        ],
+                        ),
+                      )
+                    else
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF64748B).withValues(alpha: 0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.draw_outlined, size: 16, color: Color(0xFF64748B)),
+                            ),
+                            const SizedBox(width: 10),
+                            const Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Authorized Signature',
+                                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Color(0xFF0F172A)),
+                                  ),
+                                  Text(
+                                    'Configure once in Profile to apply across all invoices',
+                                    style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            ElevatedButton(
+                              onPressed: () async {
+                                await DrawSignatureBottomSheet.show(context);
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFFF5722),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              child: const Text('Sign Now', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
 
-                    const SizedBox(height: 30),
+                    // ── Interactive Web Link & Read Status Card ──
+                    const SizedBox(height: 16),
+                    _buildInteractiveLinkCard(context, currentInvoice),
+
+                    // ── Payment Proof Banner (if submitted) ──
+                    if (currentInvoice.hasPaymentProof) ...[
+                      const SizedBox(height: 12),
+                      _buildPaymentProofBanner(context, currentInvoice),
+                    ],
+
+                    const SizedBox(height: 12),
+
+                    // ── Payment Milestones & Deposit Tranches ──
+                    _buildMilestonesSection(context, currentInvoice, profile, currencyFormat),
+
+                    const SizedBox(height: 22),
+
+                    const SizedBox(height: 24),
                   ],
                 ),
               ),
             ),
-          ),
 
-            // ── Sticky Bottom Buttons Row (Download invoice + Share invoice) ──
+            // ── Sticky Bottom Bar: Slide to Paid + (Download invoice + Share invoice) ──
             Container(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+              padding: EdgeInsets.fromLTRB(
+                20,
+                12,
+                20,
+                (MediaQuery.paddingOf(context).bottom > 0
+                    ? MediaQuery.paddingOf(context).bottom + 8
+                    : 16),
+              ),
               decoration: BoxDecoration(
                 color: Colors.white,
                 border: const Border(top: BorderSide(color: Color(0xFFE2E8F0))),
@@ -949,70 +630,122 @@ class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
                   ),
                 ],
               ),
-              child: Row(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Download invoice button
-                  Expanded(
-                    child: BouncingButton(
-                      onTap: () => PdfService.printInvoice(
-                        currentInvoice,
-                        profile,
-                        templateId: activeTemplateId,
-                      ),
-                      child: Container(
-                        height: 52,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(26),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
-                        ),
-                        alignment: Alignment.center,
-                        child: const Text(
-                          'Download invoice',
-                          style: TextStyle(
-                            fontSize: 14.5,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFF0F172A),
-                          ),
-                        ),
-                      ),
+                  // ── Slide to mark as Paid (or Paid Badge) above Download/Share ──
+                  if (!currentInvoice.isPaid) ...[
+                    SlideToConfirm(
+                      label: 'Slide to mark as Paid',
+                      completedLabel: 'Paid in Full 🎉',
+                      progressColor: const Color(0xFF10B981),
+                      icon: Icons.check_circle_rounded,
+                      onConfirmed: () async {
+                        await ref.read(invoiceProvider.notifier).togglePaymentStatus(currentInvoice.id);
+                        if (context.mounted) {
+                          CelebrationSparkle.show(
+                            context,
+                            message: 'Invoice #${currentInvoice.invoiceNumber} Paid! 🎉',
+                          );
+                        }
+                      },
                     ),
-                  ),
-                  const SizedBox(width: 12),
-
-                  // Share invoice Orange button
-                  Expanded(
-                    child: BouncingButton(
-                      onTap: () => ShareInvoiceBottomSheet.show(
-                        context,
-                        invoice: currentInvoice,
-                        profile: profile,
-                        templateId: activeTemplateId,
+                    const SizedBox(height: 12),
+                  ] else ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
                       ),
-                      child: Container(
-                        height: 52,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFF5722),
-                          borderRadius: BorderRadius.circular(26),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFFFF5722).withValues(alpha: 0.35),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 18),
+                          SizedBox(width: 8),
+                          Text(
+                            'Paid in Full 🎉',
+                            style: TextStyle(
+                              color: Color(0xFF047857),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
                             ),
-                          ],
-                        ),
-                        alignment: Alignment.center,
-                        child: const Text(
-                          'Share invoice',
-                          style: TextStyle(
-                            fontSize: 14.5,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.white,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+
+                  // ── Download invoice & Share invoice Row ──
+                  Row(
+                    children: [
+                      // Download invoice button
+                      Expanded(
+                        child: BouncingButton(
+                          onTap: () => PdfService.printInvoice(
+                            currentInvoice,
+                            profile,
+                            templateId: activeTemplateId,
+                          ),
+                          child: Container(
+                            height: 52,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(26),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                            ),
+                            alignment: Alignment.center,
+                            child: const Text(
+                              'Download invoice',
+                              style: TextStyle(
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF0F172A),
+                              ),
+                            ),
                           ),
                         ),
                       ),
-                    ),
+                      const SizedBox(width: 12),
+
+                      // Share invoice Orange button
+                      Expanded(
+                        child: BouncingButton(
+                          onTap: () => ShareInvoiceBottomSheet.show(
+                            context,
+                            invoice: currentInvoice,
+                            profile: profile,
+                            templateId: activeTemplateId,
+                          ),
+                          child: Container(
+                            height: 52,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFF5722),
+                              borderRadius: BorderRadius.circular(26),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFFFF5722).withValues(alpha: 0.35),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            alignment: Alignment.center,
+                            child: const Text(
+                              'Share invoice',
+                              style: TextStyle(
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -1038,61 +771,6 @@ class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
         ),
       ],
     );
-  }
-
-  Future<void> _handleDuplicateInvoice(Invoice invoice) async {
-    HapticFeedback.lightImpact();
-    final shouldDuplicate = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Row(
-          children: [
-            Icon(Icons.content_copy_rounded, color: Color(0xFFFF5722), size: 22),
-            SizedBox(width: 10),
-            Text('Duplicate Invoice', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
-          ],
-        ),
-        content: Text(
-          'Create a duplicate copy of INV-#${invoice.invoiceNumber} for "${invoice.client.name}" with a fresh invoice number and today\'s date?',
-          style: const TextStyle(color: Color(0xFF64748B), fontSize: 14, height: 1.4),
-        ),
-        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFF5722),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-              elevation: 0,
-            ),
-            child: const Text('Duplicate', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-
-    if (shouldDuplicate == true && mounted) {
-      HapticFeedback.mediumImpact();
-      final duplicatedInvoice = await ref.read(invoiceProvider.notifier).duplicateAsNewInvoice(invoice);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Duplicated as INV-#${duplicatedInvoice.invoiceNumber}'),
-            backgroundColor: const Color(0xFF0F172A),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-        context.pushReplacement('/preview', extra: duplicatedInvoice);
-      }
-    }
   }
 
   Widget _buildInteractiveLinkCard(BuildContext context, Invoice invoice) {
@@ -1473,6 +1151,79 @@ class _InvoicePreviewScreenState extends ConsumerState<InvoicePreviewScreen> {
               ),
             ),
             const Icon(Icons.arrow_forward_ios_rounded, size: 13, color: Color(0xFF94A3B8)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSignatureImage(BuildContext context, String signaturePath) {
+    if (kIsWeb || signaturePath.startsWith('http://') || signaturePath.startsWith('https://')) {
+      return Image.network(
+        signaturePath,
+        fit: BoxFit.contain,
+        errorBuilder: (ctx, err, stack) => _buildSignatureMissingFallback(context),
+      );
+    }
+
+    if (signaturePath.startsWith('data:image')) {
+      try {
+        final commaIdx = signaturePath.indexOf(',');
+        final base64Str = commaIdx != -1 ? signaturePath.substring(commaIdx + 1) : signaturePath;
+        final bytes = base64Decode(base64Str);
+        return Image.memory(
+          bytes,
+          fit: BoxFit.contain,
+          errorBuilder: (ctx, err, stack) => _buildSignatureMissingFallback(context),
+        );
+      } catch (_) {
+        return _buildSignatureMissingFallback(context);
+      }
+    }
+
+    final file = File(signaturePath);
+    if (!file.existsSync()) {
+      return _buildSignatureMissingFallback(context);
+    }
+
+    return Image.file(
+      file,
+      fit: BoxFit.contain,
+      errorBuilder: (ctx, err, stack) => _buildSignatureMissingFallback(context),
+    );
+  }
+
+  Widget _buildSignatureMissingFallback(BuildContext context) {
+    return InkWell(
+      onTap: () async {
+        await DrawSignatureBottomSheet.show(context);
+      },
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFEF2F2),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFFECACA)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.draw_rounded, size: 16, color: Color(0xFFDC2626)),
+            const SizedBox(width: 8),
+            const Text(
+              'Signature file missing • Tap to re-draw',
+              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFFDC2626)),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: const Color(0xFFDC2626),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Text('Re-draw', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+            ),
           ],
         ),
       ),

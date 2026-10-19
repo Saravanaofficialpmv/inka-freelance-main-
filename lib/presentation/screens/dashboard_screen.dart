@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_auth/firebase_auth.dart' show User;
@@ -267,10 +268,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       // ── Row of 2 Hero Metric Cards (Total Revenue & Pending Payments) ──
                       StaggeredSlideFade(
                         index: 0,
-                        child: IntrinsicHeight(
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
                               // Card 1: Total Revenue
                               Expanded(
                                 child: BouncingButton(
@@ -442,7 +442,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           ],
                         ),
                       ),
-                    ),
 
                     const SizedBox(height: 12),
 
@@ -587,290 +586,23 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       ),
                       const SizedBox(height: 12),
 
-                      // ── AI Invoice Insights Dark Card with Orange / Lime Button ──
+                      // ── AI Invoice Insights Dark Card with Interactive Real Data Carousel ──
                       StaggeredSlideFade(
                         index: 1,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1E2128), // Sleek Dark Charcoal Card
-                            borderRadius: BorderRadius.circular(24),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.12),
-                              blurRadius: 18,
-                              offset: const Offset(0, 6),
-                            ),
-                          ],
+                        child: _TodayInsightCard(
+                          invoices: invoices,
+                          currencyFormat: currencyFormat,
+                          totalRevenue: totalRevenue,
+                          paidAmount: paidAmount,
+                          pendingAmount: pendingAmount,
+                          pendingCount: pendingCount,
+                          overdueAmount: overdueAmount,
+                          overdueInvoices: overdueInvoices,
+                          growth: growth,
+                          isGrowthPositive: isGrowthPositive,
+                          isWide: isWide,
                         ),
-                        child: isWide
-                            ? Padding(
-                                padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              const Text(
-                                                "Today's Insight",
-                                                style: TextStyle(
-                                                  color: Color(0xFF94A3B8),
-                                                  fontSize: 12.5,
-                                                  fontWeight: FontWeight.w600,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 12),
-                                              Container(
-                                                width: 24,
-                                                height: 3.5,
-                                                decoration: BoxDecoration(
-                                                  color: const Color(0xFFFF5722),
-                                                  borderRadius: BorderRadius.circular(2),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Container(
-                                                width: 14,
-                                                height: 3.5,
-                                                decoration: BoxDecoration(
-                                                  color: Colors.white.withValues(alpha: 0.2),
-                                                  borderRadius: BorderRadius.circular(2),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 10),
-                                          const Text(
-                                            'Your projected revenue for this month is \$15,200, up 12% from last month',
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 15.5,
-                                              fontWeight: FontWeight.w600,
-                                              letterSpacing: -0.2,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 10),
-                                          GestureDetector(
-                                            onTap: () => context.go('/expenses'),
-                                            child: const Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Text(
-                                                  'View statistics',
-                                                  style: TextStyle(
-                                                    color: Color(0xFFFF7A50),
-                                                    fontSize: 13,
-                                                    fontWeight: FontWeight.w700,
-                                                  ),
-                                                ),
-                                                SizedBox(width: 4),
-                                                Icon(
-                                                  Icons.chevron_right_rounded,
-                                                  size: 16,
-                                                  color: Color(0xFFFF7A50),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 24),
-                                    BouncingButton(
-                                      onTap: () => CreateInvoiceScreen.showAsBottomSheet(context),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                                        decoration: BoxDecoration(
-                                          gradient: const LinearGradient(
-                                            colors: [Color(0xFFFF5722), Color(0xFFFF7A50)],
-                                            begin: Alignment.topLeft,
-                                            end: Alignment.bottomRight,
-                                          ),
-                                          borderRadius: BorderRadius.circular(16),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: const Color(0xFFFF5722).withValues(alpha: 0.35),
-                                              blurRadius: 12,
-                                              offset: const Offset(0, 4),
-                                            ),
-                                          ],
-                                        ),
-                                        child: const Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(Icons.add_rounded, color: Colors.white, size: 20),
-                                            SizedBox(width: 8),
-                                            Text(
-                                              'Create new invoice',
-                                              style: TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 14.5,
-                                                fontWeight: FontWeight.w800,
-                                                letterSpacing: -0.2,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              )
-                            : Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Padding(
-                                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        // Top Row: "Today's Insight" + 3 Carousel Indicator Bars
-                                        Row(
-                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            const Text(
-                                              "Today's Insight",
-                                              style: TextStyle(
-                                                color: Color(0xFF94A3B8),
-                                                fontSize: 12.5,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                            Row(
-                                              children: [
-                                                Container(
-                                                  width: 24,
-                                                  height: 3.5,
-                                                  decoration: BoxDecoration(
-                                                    color: const Color(0xFFFF5722), // Orange active indicator
-                                                    borderRadius: BorderRadius.circular(2),
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 4),
-                                                Container(
-                                                  width: 14,
-                                                  height: 3.5,
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.white.withValues(alpha: 0.2),
-                                                    borderRadius: BorderRadius.circular(2),
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 4),
-                                                Container(
-                                                  width: 14,
-                                                  height: 3.5,
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.white.withValues(alpha: 0.2),
-                                                    borderRadius: BorderRadius.circular(2),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 14),
-
-                                        // Main Insight Copy
-                                        RichText(
-                                          text: TextSpan(
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 15.5,
-                                              fontWeight: FontWeight.w600,
-                                              height: 1.45,
-                                              letterSpacing: -0.2,
-                                            ),
-                                            children: [
-                                              const TextSpan(text: 'Your projected revenue for this month is '),
-                                              const TextSpan(
-                                                text: '\$15,200, up 12%',
-                                                style: TextStyle(
-                                                  color: Colors.white,
-                                                  fontWeight: FontWeight.w900,
-                                                ),
-                                              ),
-                                              TextSpan(
-                                                text: ' from last month',
-                                                style: TextStyle(
-                                                  color: Colors.white.withValues(alpha: 0.65),
-                                                  fontWeight: FontWeight.normal,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        const SizedBox(height: 14),
-
-                                        // View statistics >
-                                        GestureDetector(
-                                          onTap: () => context.go('/expenses'),
-                                          child: const Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Text(
-                                                'View statistics',
-                                                style: TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 13,
-                                                  fontWeight: FontWeight.w600,
-                                                ),
-                                              ),
-                                              SizedBox(width: 4),
-                                              Icon(
-                                                Icons.chevron_right_rounded,
-                                                size: 16,
-                                                color: Colors.white,
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-
-                                  // Attached Bottom Button ("Create new invoice") in Vibrant Orange with Lime/Teal touches
-                                  BouncingButton(
-                                    onTap: () => CreateInvoiceScreen.showAsBottomSheet(context),
-                                    child: Container(
-                                      width: double.infinity,
-                                      margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-                                      padding: const EdgeInsets.symmetric(vertical: 14),
-                                      decoration: BoxDecoration(
-                                        gradient: const LinearGradient(
-                                          colors: [Color(0xFFFF5722), Color(0xFFFF7A50)], // Vibrant Orange
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                        ),
-                                        borderRadius: BorderRadius.circular(18),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: const Color(0xFFFF5722).withValues(alpha: 0.35),
-                                            blurRadius: 12,
-                                            offset: const Offset(0, 4),
-                                          ),
-                                        ],
-                                      ),
-                                      child: const Center(
-                                        child: Text(
-                                          'Create new invoice',
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 15,
-                                            fontWeight: FontWeight.w800,
-                                            letterSpacing: -0.2,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
                       ),
-                    ),
-
                       const SizedBox(height: 24),
 
                       // ── Section Title: Pending invoice ──
@@ -942,37 +674,40 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   Widget _buildTimeframeChip(String key, String label) {
     final isSelected = _selectedTimeframe == key;
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        setState(() => _selectedTimeframe = key);
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF1E2128) : Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: isSelected ? const Color(0xFF1E2128) : const Color(0xFFE2E8F0),
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          setState(() => _selectedTimeframe = key);
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFF1E2128) : Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: isSelected ? const Color(0xFF1E2128) : const Color(0xFFE2E8F0),
+            ),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
           ),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.08),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : null,
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-            color: isSelected ? Colors.white : const Color(0xFF64748B),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+              color: isSelected ? Colors.white : const Color(0xFF64748B),
+            ),
           ),
         ),
       ),
@@ -1149,10 +884,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 40),
                   child: Column(
                     children: [
-                      IntrinsicHeight(
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                             // Card 1: Total Revenue
                             Expanded(
                               child: BouncingButton(
@@ -1345,7 +1079,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             ),
                           ],
                         ),
-                      ),
 
                       const SizedBox(height: 14),
 
@@ -1972,7 +1705,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               Expanded(flex: 2, child: Text('STATUS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF6B7280), letterSpacing: 0.4))),
                               Expanded(flex: 2, child: Text('AMOUNT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF6B7280), letterSpacing: 0.4))),
                               Expanded(flex: 2, child: Text('DATE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF6B7280), letterSpacing: 0.4))),
-                              SizedBox(width: 80, child: Text('ACTIONS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF6B7280), letterSpacing: 0.4))),
+                              SizedBox(width: 88, child: Text('ACTIONS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF6B7280), letterSpacing: 0.4))),
                             ],
                           ),
                         ),
@@ -2296,19 +2029,30 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
             // Actions
             SizedBox(
-              width: 80,
+              width: 88,
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
                     icon: const Icon(Icons.visibility_outlined, size: 18, color: AppColors.textSecondary),
                     tooltip: 'Preview',
+                    style: IconButton.styleFrom(
+                      minimumSize: const Size(34, 34),
+                      padding: EdgeInsets.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
                     splashRadius: 16,
                     onPressed: () => context.push('/preview', extra: invoice),
                   ),
+                  const SizedBox(width: 4),
                   IconButton(
                     icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.textSecondary),
                     tooltip: 'Edit',
+                    style: IconButton.styleFrom(
+                      minimumSize: const Size(34, 34),
+                      padding: EdgeInsets.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
                     splashRadius: 16,
                     onPressed: () => CreateInvoiceScreen.showAsBottomSheet(context, invoiceToEdit: invoice),
                   ),
@@ -2465,6 +2209,655 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 }
 
 
+// ── Today's Insight Interactive Real-Data Carousel ──
+class _TodayInsightCard extends StatefulWidget {
+  final List<Invoice> invoices;
+  final NumberFormat currencyFormat;
+  final double totalRevenue;
+  final double paidAmount;
+  final double pendingAmount;
+  final int pendingCount;
+  final double overdueAmount;
+  final List<Invoice> overdueInvoices;
+  final double growth;
+  final bool isGrowthPositive;
+  final bool isWide;
+
+  const _TodayInsightCard({
+    required this.invoices,
+    required this.currencyFormat,
+    required this.totalRevenue,
+    required this.paidAmount,
+    required this.pendingAmount,
+    required this.pendingCount,
+    required this.overdueAmount,
+    required this.overdueInvoices,
+    required this.growth,
+    required this.isGrowthPositive,
+    required this.isWide,
+  });
+
+  @override
+  State<_TodayInsightCard> createState() => _TodayInsightCardState();
+}
+
+class _TodayInsightCardState extends State<_TodayInsightCard> {
+  late final PageController _pageController;
+  int _currentPage = 0;
+  Timer? _autoAdvanceTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+    _startAutoAdvance();
+  }
+
+  void _startAutoAdvance() {
+    _autoAdvanceTimer?.cancel();
+    _autoAdvanceTimer = Timer.periodic(const Duration(seconds: 6), (_) {
+      if (!mounted || !_pageController.hasClients) return;
+      final next = (_currentPage + 1) % 3;
+      _pageController.animateToPage(
+        next,
+        duration: const Duration(milliseconds: 380),
+        curve: Curves.easeInOutCubic,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _autoAdvanceTimer?.cancel();
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final startOfMonth = DateTime(now.year, now.month, 1);
+    final thisMonthInvoices = widget.invoices
+        .where((i) => !i.issueDate.isBefore(startOfMonth))
+        .toList();
+    final thisMonthRevenue =
+        thisMonthInvoices.fold<double>(0.0, (sum, i) => sum + i.total);
+
+    final startOfLastMonth = DateTime(now.year, now.month - 1, 1);
+    final lastMonthInvoices = widget.invoices
+        .where((i) =>
+            !i.issueDate.isBefore(startOfLastMonth) &&
+            i.issueDate.isBefore(startOfMonth))
+        .toList();
+    final lastMonthRevenue =
+        lastMonthInvoices.fold<double>(0.0, (sum, i) => sum + i.total);
+
+    double monthGrowth = 0.0;
+    if (lastMonthRevenue > 0) {
+      monthGrowth = ((thisMonthRevenue - lastMonthRevenue) / lastMonthRevenue) * 100;
+    } else if (thisMonthRevenue > 0) {
+      monthGrowth = 100.0;
+    }
+
+    // Slide 0: Monthly Revenue & Growth
+    Widget slide0;
+    if (thisMonthRevenue > 0) {
+      slide0 = RichText(
+        text: TextSpan(
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 15.5,
+            fontWeight: FontWeight.w600,
+            height: 1.45,
+            letterSpacing: -0.2,
+          ),
+          children: [
+            const TextSpan(text: 'Your revenue for this month is '),
+            TextSpan(
+              text: widget.currencyFormat.format(thisMonthRevenue),
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            TextSpan(
+              text: lastMonthRevenue > 0
+                  ? (monthGrowth >= 0
+                      ? ', up ${monthGrowth.toStringAsFixed(0)}% from last month'
+                      : ', down ${monthGrowth.abs().toStringAsFixed(0)}% from last month')
+                  : ' across ${thisMonthInvoices.length} bill${thisMonthInvoices.length == 1 ? '' : 's'}',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.65),
+                fontWeight: FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      );
+    } else if (widget.invoices.isNotEmpty) {
+      slide0 = RichText(
+        text: TextSpan(
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 15.5,
+            fontWeight: FontWeight.w600,
+            height: 1.45,
+            letterSpacing: -0.2,
+          ),
+          children: [
+            const TextSpan(text: 'No invoices issued this month yet. '),
+            TextSpan(
+              text: widget.currencyFormat.format(widget.totalRevenue),
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            TextSpan(
+              text: ' in total all-time revenue',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.65),
+                fontWeight: FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      );
+    } else {
+      slide0 = RichText(
+        text: TextSpan(
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 15.5,
+            fontWeight: FontWeight.w600,
+            height: 1.45,
+            letterSpacing: -0.2,
+          ),
+          children: [
+            const TextSpan(text: 'Welcome to Inka! '),
+            const TextSpan(
+              text: 'Create your first invoice',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            TextSpan(
+              text: ' to track real-time revenue and growth',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.65),
+                fontWeight: FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Slide 1: Cashflow & Receivables
+    Widget slide1;
+    if (widget.overdueInvoices.isNotEmpty) {
+      slide1 = RichText(
+        text: TextSpan(
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 15.5,
+            fontWeight: FontWeight.w600,
+            height: 1.45,
+            letterSpacing: -0.2,
+          ),
+          children: [
+            const TextSpan(text: 'Payment attention: '),
+            TextSpan(
+              text: '${widget.currencyFormat.format(widget.overdueAmount)} is overdue',
+              style: const TextStyle(
+                color: Color(0xFFFF7A50),
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            TextSpan(
+              text: ' across ${widget.overdueInvoices.length} bill${widget.overdueInvoices.length == 1 ? '' : 's'}',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.65),
+                fontWeight: FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      );
+    } else if (widget.pendingAmount > 0) {
+      slide1 = RichText(
+        text: TextSpan(
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 15.5,
+            fontWeight: FontWeight.w600,
+            height: 1.45,
+            letterSpacing: -0.2,
+          ),
+          children: [
+            const TextSpan(text: 'Outstanding cashflow: '),
+            TextSpan(
+              text: '${widget.currencyFormat.format(widget.pendingAmount)} pending',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            TextSpan(
+              text: ' across ${widget.pendingCount} invoice${widget.pendingCount == 1 ? '' : 's'} awaiting client payment',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.65),
+                fontWeight: FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      );
+    } else if (widget.invoices.isNotEmpty) {
+      slide1 = RichText(
+        text: TextSpan(
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 15.5,
+            fontWeight: FontWeight.w600,
+            height: 1.45,
+            letterSpacing: -0.2,
+          ),
+          children: [
+            const TextSpan(text: 'Healthy cashflow: '),
+            const TextSpan(
+              text: '100% collected',
+              style: TextStyle(
+                color: Color(0xFF10B981),
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            TextSpan(
+              text: ' with all customer invoices fully settled',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.65),
+                fontWeight: FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      );
+    } else {
+      slide1 = RichText(
+        text: TextSpan(
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 15.5,
+            fontWeight: FontWeight.w600,
+            height: 1.45,
+            letterSpacing: -0.2,
+          ),
+          children: [
+            const TextSpan(text: 'Smart payments: '),
+            const TextSpan(
+              text: 'Automated UPI QR & Bank',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            TextSpan(
+              text: ' details embedded on every bill',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.65),
+                fontWeight: FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Slide 2: Paid Collections & Sharing
+    Widget slide2;
+    if (widget.paidAmount > 0) {
+      final paidCount = widget.invoices.where((i) => i.isPaid).length;
+      slide2 = RichText(
+        text: TextSpan(
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 15.5,
+            fontWeight: FontWeight.w600,
+            height: 1.45,
+            letterSpacing: -0.2,
+          ),
+          children: [
+            const TextSpan(text: 'Settled revenue: '),
+            TextSpan(
+              text: widget.currencyFormat.format(widget.paidAmount),
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            TextSpan(
+              text: ' collected across $paidCount paid bill${paidCount == 1 ? '' : 's'}',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.65),
+                fontWeight: FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      );
+    } else if (widget.invoices.isNotEmpty) {
+      slide2 = RichText(
+        text: TextSpan(
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 15.5,
+            fontWeight: FontWeight.w600,
+            height: 1.45,
+            letterSpacing: -0.2,
+          ),
+          children: [
+            const TextSpan(text: 'Client billing: '),
+            TextSpan(
+              text: '${widget.invoices.length} invoices',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            TextSpan(
+              text: ' ready to share on WhatsApp, Email, or live link',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.65),
+                fontWeight: FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      );
+    } else {
+      slide2 = RichText(
+        text: TextSpan(
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 15.5,
+            fontWeight: FontWeight.w600,
+            height: 1.45,
+            letterSpacing: -0.2,
+          ),
+          children: [
+            const TextSpan(text: 'Professional workflow: '),
+            const TextSpan(
+              text: 'Digital Signature & 14 PDF designs',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            TextSpan(
+              text: ' applied automatically',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.65),
+                fontWeight: FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final indicators = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(3, (index) {
+        final isActive = _currentPage == index;
+        return GestureDetector(
+          onTap: () {
+            _startAutoAdvance();
+            _pageController.animateToPage(
+              index,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOutCubic,
+            );
+          },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOutCubic,
+            margin: const EdgeInsets.only(left: 4),
+            width: isActive ? 24 : 14,
+            height: 3.5,
+            decoration: BoxDecoration(
+              color: isActive
+                  ? const Color(0xFFFF5722)
+                  : Colors.white.withValues(alpha: 0.25),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        );
+      }),
+    );
+
+    if (widget.isWide) {
+      return Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E2128),
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.12),
+              blurRadius: 18,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        "Today's Insight",
+                        style: TextStyle(
+                          color: Color(0xFF94A3B8),
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      indicators,
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    height: 52,
+                    child: PageView(
+                      controller: _pageController,
+                      onPageChanged: (idx) => setState(() => _currentPage = idx),
+                      children: [slide0, slide1, slide2],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  GestureDetector(
+                    onTap: () => context.go('/expenses'),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'View statistics',
+                          style: TextStyle(
+                            color: Color(0xFFFF7A50),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        SizedBox(width: 4),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          size: 16,
+                          color: Color(0xFFFF7A50),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 24),
+            BouncingButton(
+              onTap: () => CreateInvoiceScreen.showAsBottomSheet(context),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFFF5722), Color(0xFFFF7A50)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFFF5722).withValues(alpha: 0.35),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.add_rounded, color: Colors.white, size: 20),
+                    SizedBox(width: 8),
+                    Text(
+                      'Create new invoice',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E2128),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      "Today's Insight",
+                      style: TextStyle(
+                        color: Color(0xFF94A3B8),
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    indicators,
+                  ],
+                ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  height: 52,
+                  child: PageView(
+                    controller: _pageController,
+                    onPageChanged: (idx) => setState(() => _currentPage = idx),
+                    children: [slide0, slide1, slide2],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                GestureDetector(
+                  onTap: () => context.go('/expenses'),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'View statistics',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(width: 4),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          BouncingButton(
+            onTap: () => CreateInvoiceScreen.showAsBottomSheet(context),
+            child: Container(
+              width: double.infinity,
+              margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFFF5722), Color(0xFFFF7A50)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFFF5722).withValues(alpha: 0.35),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Center(
+                child: Text(
+                  'Create new invoice',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ── Formatted Amount with .00 Decimals & Animated Rolling Numbers ──
 class _FormattedAmountText extends StatelessWidget {
   final double amount;
@@ -2484,7 +2877,7 @@ class _FormattedAmountText extends StatelessWidget {
   }
 }
 
-// ── Vertical Rounded Bar Chart Graphic (Functional Real 7-Day Data) ──
+// ── Vertical Rounded Bar Chart Graphic (Fully Functional Real 7-Day Data) ──
 class _RevenueBarsGraphic extends StatelessWidget {
   final List<Invoice> invoices;
   final NumberFormat currencyFormat;
@@ -2497,28 +2890,37 @@ class _RevenueBarsGraphic extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
+
+    // Check if invoices exist in recent 7 days, else anchor to latest invoice date
+    DateTime anchor = now;
+    final hasRecent = invoices.any((inv) =>
+        inv.issueDate.isAfter(now.subtract(const Duration(days: 7))) &&
+        !inv.issueDate.isAfter(now.add(const Duration(days: 1))));
+
+    if (!hasRecent && invoices.isNotEmpty) {
+      anchor = invoices.map((i) => i.issueDate).reduce((a, b) => a.isAfter(b) ? a : b);
+    }
+
     final List<Map<String, dynamic>> daysData = [];
     double maxRevenue = 0.0;
 
     for (int i = 6; i >= 0; i--) {
-      final date = now.subtract(Duration(days: i));
+      final date = anchor.subtract(Duration(days: i));
       final dayRevenue = invoices
           .where((inv) =>
               inv.issueDate.year == date.year &&
               inv.issueDate.month == date.month &&
               inv.issueDate.day == date.day)
           .fold<double>(0.0, (sum, inv) => sum + inv.total);
+
       if (dayRevenue > maxRevenue) maxRevenue = dayRevenue;
       daysData.add({
         'day': DateFormat('E').format(date),
         'date': DateFormat('dd MMM').format(date),
         'revenue': dayRevenue,
-        'isToday': i == 0,
+        'isToday': date.year == now.year && date.month == now.month && date.day == now.day,
       });
     }
-
-    // Default aesthetic proportions if no daily variation yet
-    final defaultHeights = [22.0, 14.0, 28.0, 18.0, 15.0, 36.0, 24.0];
 
     return SizedBox(
       height: 44,
@@ -2528,27 +2930,41 @@ class _RevenueBarsGraphic extends StatelessWidget {
         children: List.generate(7, (index) {
           final data = daysData[index];
           final revenue = data['revenue'] as double;
+          final isToday = data['isToday'] as bool;
 
           double height;
+          Color barColor;
+
           if (maxRevenue > 0) {
-            height = ((revenue / maxRevenue) * 28.0 + 10.0).clamp(10.0, 40.0);
+            if (revenue > 0) {
+              height = ((revenue / maxRevenue) * 30.0 + 12.0).clamp(12.0, 42.0);
+              barColor = (revenue == maxRevenue)
+                  ? const Color(0xFF0D3B3E)
+                  : const Color(0xFF1E293B);
+            } else {
+              height = isToday ? 10.0 : 8.0;
+              barColor = isToday ? const Color(0xFFCBD5E1) : const Color(0xFFE5E7EB);
+            }
           } else {
-            height = defaultHeights[index];
+            // Clean baseline if no revenue
+            height = 8.0;
+            barColor = isToday ? const Color(0xFFCBD5E1) : const Color(0xFFE5E7EB);
           }
 
-          // Highlight today (or highest revenue day)
-          final isHighlighted = (maxRevenue > 0 && revenue == maxRevenue && revenue > 0) ||
-              (maxRevenue == 0 && index == 5);
+          final tooltipMessage = revenue > 0
+              ? '${data['day']}, ${data['date']}: ${currencyFormat.format(revenue)}${revenue == maxRevenue ? ' (Peak)' : ''}'
+              : '${data['day']}, ${data['date']}: No Revenue';
 
           return Tooltip(
-            message: '${data['day']}, ${data['date']}: ${currencyFormat.format(revenue)}',
+            message: tooltipMessage,
+            triggerMode: TooltipTriggerMode.tap,
             child: AnimatedContainer(
               duration: AppMotion.numberTransition,
               curve: AppMotion.entrance,
               width: 14,
               height: height,
               decoration: BoxDecoration(
-                color: isHighlighted ? const Color(0xFF0D3B3E) : const Color(0xFFE5E7EB),
+                color: barColor,
                 borderRadius: BorderRadius.circular(6),
               ),
             ),
@@ -2559,7 +2975,7 @@ class _RevenueBarsGraphic extends StatelessWidget {
   }
 }
 
-// ── Dot Matrix Graphic (Functional 4 rows x 8 columns = 32 slots) ──
+// ── Dot Matrix Graphic (Fully Functional 4 rows x 8 columns = 32 slots) ──
 class _DotMatrixGraphic extends StatelessWidget {
   final List<Invoice> invoices;
   final NumberFormat currencyFormat;
@@ -2574,12 +2990,27 @@ class _DotMatrixGraphic extends StatelessWidget {
     final now = DateTime.now();
     final int currentDay = now.day;
 
-    // Group invoices by due date in current month
-    final Map<int, List<Invoice>> dayInvoiceMap = {};
-    for (final inv in invoices) {
-      if (inv.dueDate.year == now.year && inv.dueDate.month == now.month) {
-        dayInvoiceMap.putIfAbsent(inv.dueDate.day, () => []).add(inv);
-      }
+    final pendingList = invoices.where((i) => !i.isPaid).toList();
+    final paidList = invoices.where((i) => i.isPaid).toList();
+
+    // Map pending invoices by day (prioritizing due date in current month, clamped to 1..31)
+    final Map<int, List<Invoice>> dayPendingMap = {};
+    for (final inv in pendingList) {
+      final day = (inv.dueDate.month == now.month && inv.dueDate.year == now.year)
+          ? inv.dueDate.day
+          : (inv.issueDate.month == now.month && inv.issueDate.year == now.year)
+              ? inv.issueDate.day
+              : inv.dueDate.day.clamp(1, 31);
+      dayPendingMap.putIfAbsent(day, () => []).add(inv);
+    }
+
+    // Map paid invoices by day
+    final Map<int, List<Invoice>> dayPaidMap = {};
+    for (final inv in paidList) {
+      final day = (inv.issueDate.month == now.month && inv.issueDate.year == now.year)
+          ? inv.issueDate.day
+          : inv.dueDate.day.clamp(1, 31);
+      dayPaidMap.putIfAbsent(day, () => []).add(inv);
     }
 
     return SizedBox(
@@ -2593,36 +3024,35 @@ class _DotMatrixGraphic extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: List.generate(8, (col) {
                 final dayIndex = (row * 8) + col + 1; // 1..32
-                final dayInvoices = dayInvoiceMap[dayIndex] ?? [];
-                final hasPending = dayInvoices.any((i) => !i.isPaid);
-                final hasPaid = dayInvoices.any((i) => i.isPaid);
-                final isPastOrToday = dayIndex <= currentDay;
 
                 Color dotColor;
-                String tooltipMsg = 'Day $dayIndex: No invoices';
+                String tooltipMsg;
 
-                if (hasPending) {
-                  final pendingTotal = dayInvoices.where((i) => !i.isPaid).fold<double>(0.0, (s, i) => s + i.total);
+                if (dayPendingMap.containsKey(dayIndex)) {
+                  final dayPending = dayPendingMap[dayIndex]!;
+                  final pendingTotal = dayPending.fold<double>(0.0, (s, i) => s + i.total);
+                  final invNumbers = dayPending.map((i) => i.invoiceNumber).join(', ');
                   dotColor = const Color(0xFFFF5722); // Vibrant Orange alert dot
-                  tooltipMsg = 'Day $dayIndex: ${currencyFormat.format(pendingTotal)} Pending';
-                } else if (hasPaid) {
+                  tooltipMsg = 'Day $dayIndex: ${currencyFormat.format(pendingTotal)} Pending ($invNumbers)';
+                } else if (dayPaidMap.containsKey(dayIndex)) {
+                  final dayPaid = dayPaidMap[dayIndex]!;
+                  final paidTotal = dayPaid.fold<double>(0.0, (s, i) => s + i.total);
                   dotColor = const Color(0xFF0D3B3E); // Dark Teal paid dot
-                  tooltipMsg = 'Day $dayIndex: Paid';
-                } else if (isPastOrToday && (row < 2 && col < 5 || row == 2 && col < 6 || row == 3 && col < 4)) {
-                  // Structured filled pattern matching reference
-                  dotColor = const Color(0xFF0D3B3E);
-                  tooltipMsg = 'Day $dayIndex: Active';
-                } else if (dayIndex == 5 || dayIndex == 22) {
-                  // Accent dots matching reference styling
-                  final hasAnyPending = invoices.any((i) => !i.isPaid);
-                  dotColor = hasAnyPending ? const Color(0xFFFF5722) : const Color(0xFF0D3B3E);
-                  tooltipMsg = hasAnyPending ? 'Pending Payment Alert' : 'Active Cycle';
+                  tooltipMsg = 'Day $dayIndex: ${currencyFormat.format(paidTotal)} Paid';
+                } else if (dayIndex == currentDay) {
+                  dotColor = const Color(0xFF64748B); // Slate dot for today
+                  tooltipMsg = 'Day $dayIndex: Today';
+                } else if (dayIndex < currentDay) {
+                  dotColor = const Color(0xFFCBD5E1); // Muted grey dot for passed days
+                  tooltipMsg = 'Day $dayIndex: No Invoices';
                 } else {
-                  dotColor = const Color(0xFFE5E7EB);
+                  dotColor = const Color(0xFFF1F5F9); // Light grey dot for upcoming days
+                  tooltipMsg = 'Day $dayIndex: Upcoming';
                 }
 
                 return Tooltip(
                   message: tooltipMsg,
+                  triggerMode: TooltipTriggerMode.tap,
                   child: AnimatedContainer(
                     duration: AppMotion.standard,
                     curve: AppMotion.stateChange,

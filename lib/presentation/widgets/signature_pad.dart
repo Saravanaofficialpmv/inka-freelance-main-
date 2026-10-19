@@ -142,13 +142,16 @@ class SignaturePadController extends ChangeNotifier {
     Directory dir;
     try {
       dir = await getApplicationDocumentsDirectory();
+      if (!dir.existsSync()) {
+        dir.createSync(recursive: true);
+      }
     } catch (_) {
       dir = Directory.systemTemp;
     }
 
     final filename = 'signature_${DateTime.now().millisecondsSinceEpoch}.png';
     final file = File('${dir.path}/$filename');
-    await file.writeAsBytes(bytes);
+    await file.writeAsBytes(bytes, flush: true);
     return file.path;
   }
 }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -53,42 +54,66 @@ import 'presentation/screens/language_settings_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Configure custom ErrorWidget builder to prevent stack trace leaks to users
+  // Configure custom ErrorWidget builder to log exceptions and prevent full-screen freezes
   ErrorWidget.builder = (FlutterErrorDetails details) {
-    return Material(
-      color: const Color(0xFFF8F9FA),
+    debugPrint('════════════ Flutter Error in Widget Tree ════════════');
+    debugPrint(details.exceptionAsString());
+    debugPrint(details.stack.toString());
+    debugPrint('═══════════════════════════════════════════════════════');
+
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Material(
+        color: const Color(0xFFF8F9FA),
       child: Center(
         child: Padding(
-          padding: const EdgeInsets.all(28.0),
+          padding: const EdgeInsets.all(24.0),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 56,
-                height: 56,
+                width: 52,
+                height: 52,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: const Color(0xFFFF5722).withValues(alpha: 0.1),
                 ),
-                child: const Icon(Icons.warning_amber_rounded, size: 30, color: Color(0xFFFF5722)),
+                child: const Icon(Icons.warning_amber_rounded, size: 28, color: Color(0xFFFF5722)),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               const Text(
                 'Something went wrong',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
               ),
               const SizedBox(height: 6),
               const Text(
                 'A display error occurred. Your data remains safe and intact.',
-                style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
                 textAlign: TextAlign.center,
               ),
+              if (kDebugMode) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  constraints: const BoxConstraints(maxWidth: 540),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFCBD5E1)),
+                  ),
+                  child: SelectableText(
+                    details.exceptionAsString(),
+                    style: const TextStyle(fontSize: 11, fontFamily: 'monospace', color: Color(0xFF334155)),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
       ),
-    );
-  };
+    ),
+  );
+};
   
   // 1. Initialize Firebase
   try {
@@ -122,6 +147,7 @@ void main() async {
     _safeOpenBox<TimeEntry>('time_entries'),
     _safeOpenBox<Project>('projects'),
     _safeOpenBox('subscription_prefs'),
+    _safeOpenBox('template_config'),
   ]);
   
   runApp(const ProviderScope(child: InkaApp()));
@@ -203,11 +229,27 @@ final routerProvider = Provider<GoRouter>((ref) {
           invoiceId: s.pathParameters['id'] ?? '',
         ),
       ),
+      GoRoute(
+        parentNavigatorKey: rootNavigatorKey,
+        path: '/preview',
+        pageBuilder: (c, s) => NoTransitionPage(
+          child: s.extra is Invoice ? InvoicePreviewScreen(invoice: s.extra as Invoice) : const DashboardScreen(),
+        ),
+      ),
+      GoRoute(
+        parentNavigatorKey: rootNavigatorKey,
+        path: '/create-invoice',
+        pageBuilder: (c, s) => const NoTransitionPage(child: CreateInvoiceScreen()),
+      ),
       
       ShellRoute(
         navigatorKey: shellNavigatorKey,
         builder: (context, state, child) => NavShell(state: state, child: child),
         routes: [
+          GoRoute(
+            path: '/',
+            redirect: (context, state) => '/dashboard',
+          ),
           GoRoute(
             path: '/dashboard',
             pageBuilder: (c, s) => const NoTransitionPage(child: DashboardScreen()),
@@ -223,6 +265,9 @@ final routerProvider = Provider<GoRouter>((ref) {
             ),
           ),
           GoRoute(path: '/clients', pageBuilder: (c, s) => const NoTransitionPage(child: ClientsScreen())),
+          GoRoute(path: '/clients-tab', pageBuilder: (c, s) => const NoTransitionPage(child: ClientsScreen())),
+          GoRoute(path: '/statistics', redirect: (c, s) => '/expenses'),
+          GoRoute(path: '/settings', redirect: (c, s) => '/profile'),
           GoRoute(path: '/expenses', pageBuilder: (c, s) => const NoTransitionPage(child: ExpensesScreen())),
           GoRoute(path: '/profile', pageBuilder: (c, s) => const NoTransitionPage(child: ProfileScreen())),
           GoRoute(path: '/projects', pageBuilder: (c, s) => const NoTransitionPage(child: ProjectsScreen())),
@@ -259,16 +304,6 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: '/help-support', pageBuilder: (c, s) => const NoTransitionPage(child: HelpSupportScreen())),
           GoRoute(path: '/privacy-policy', pageBuilder: (c, s) => const NoTransitionPage(child: PrivacyPolicyScreen())),
           GoRoute(path: '/state-showcase', pageBuilder: (c, s) => const NoTransitionPage(child: StateShowcaseScreen())),
-          GoRoute(
-            path: '/preview',
-            pageBuilder: (c, s) => NoTransitionPage(
-              child: s.extra is Invoice ? InvoicePreviewScreen(invoice: s.extra as Invoice) : const DashboardScreen(),
-            ),
-          ),
-          GoRoute(
-            path: '/create-invoice',
-            pageBuilder: (c, s) => const NoTransitionPage(child: CreateInvoiceScreen()),
-          ),
         ],
       ),
     ],

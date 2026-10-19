@@ -17,11 +17,11 @@ class BusinessProfileAdapter extends TypeAdapter<BusinessProfile> {
       for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
     };
     return BusinessProfile(
-      businessName: fields[0] as String,
-      address: fields[1] as String,
-      phone: fields[2] as String,
-      email: fields[3] as String,
-      currency: fields[4] as String,
+      businessName: (fields[0] as String?) ?? '',
+      address: (fields[1] as String?) ?? '',
+      phone: (fields[2] as String?) ?? '',
+      email: (fields[3] as String?) ?? '',
+      currency: (fields[4] as String?) ?? 'USD',
       logoUrl: fields[5] as String?,
       gstNumber: fields[6] as String?,
       accountHolderName: fields[7] as String?,

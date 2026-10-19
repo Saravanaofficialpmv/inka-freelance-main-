@@ -59,9 +59,13 @@ class CurrencyTaxService {
     TaxScheme(label: 'None / 0%', region: 'Tax Exempt / Export', defaultRate: 0.0, idPrompt: 'Tax Exempt ID'),
   ];
 
-  static CurrencyInfo findCurrency(String codeOrSymbol) {
+  static CurrencyInfo findCurrency(String? codeOrSymbol) {
+    if (codeOrSymbol == null || codeOrSymbol.trim().isEmpty) {
+      return supportedCurrencies.first;
+    }
+    final trimmed = codeOrSymbol.trim().toLowerCase();
     return supportedCurrencies.firstWhere(
-      (c) => c.code.toLowerCase() == codeOrSymbol.toLowerCase() || c.symbol == codeOrSymbol,
+      (c) => c.code.toLowerCase() == trimmed || c.symbol.toLowerCase() == trimmed,
       orElse: () => supportedCurrencies.first,
     );
   }
